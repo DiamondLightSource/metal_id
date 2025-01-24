@@ -1,0 +1,6 @@
+#!/bin/bash
+
+full_path="$(cd "${0%/*}" 2>/dev/null; echo "$PWD"/"${0##*/}")"
+export METAL_ID_ROOT=`dirname "$full_path" | sed 's/\/bin$//'`
+
+cctbx.python ${METAL_ID_ROOT}/src/metal_id/metal_id.py $@

@@ -1,0 +1,29 @@
+repos:
+# Syntax validation and some basic sanity checks
+- repo: https://github.com/pre-commit/pre-commit-hooks
+  rev: v5.0.0
+  hooks:
+  - id: check-merge-conflict
+  - id: check-ast
+    fail_fast: True
+  - id: check-json
+  - id: check-added-large-files
+    args: ['--maxkb=200']
+  - id: check-yaml
+
+- repo: https://github.com/astral-sh/ruff-pre-commit
+  rev: v0.7.0
+  hooks:
+    - id: ruff
+      args: [--fix, --exit-non-zero-on-fix, --show-fixes]
+    - id: ruff-format
+      files: \.pyi?$|SConscript$|^libtbx_config$
+      types: [file]
+
+# Type checking
+- repo: https://github.com/pre-commit/mirrors-mypy
+  rev: v1.13.0
+  hooks:
+  - id: mypy
+    files: 'src/.*\.py$'
+    additional_dependencies: ['types-pytz==2021.3.2', 'types-python-dateutil==2.8.3', 'types-setuptools==57.4.4', 'types-PyYAML==6.0.1', 'types-pycurl==7.44.1', 'types-requests==2.26.1', 'types-certifi==2021.10.8.0', 'types-pyOpenSSL==21.0.1']

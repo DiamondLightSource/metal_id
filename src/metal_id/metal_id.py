@@ -1,0 +1,121 @@
+import argparse
+import shutil
+import sys
+import logging.config
+from pathlib import Path
+from metal_id_helpers import (
+    ensure_unique_directory,
+    PDBFileOrCode,
+    mtz_exists,
+    run_dimple,
+)
+from scaling import scale_data
+from calc_map import calc_double_diff_maps
+
+# Command line interface
+parser = argparse.ArgumentParser(
+    prog="metal_id",
+    description="Locate a given element from data collected above and below the element's absorption edge.",
+    usage="%(prog)s mtz_above mtz_below pdb",
+    epilog="metal_id is still in development, if you have any issues with it, please contact Phil Blowey",
+)
+
+parser.add_argument(
+    "mtz_above",
+    type=mtz_exists,
+    help="Path to mtz file containing data collected above the absorption edge",
+)
+parser.add_argument(
+    "mtz_below",
+    type=mtz_exists,
+    help="Path to mtz file containing data collected below the absorption edge",
+)
+parser.add_argument(
+    "pdb",
+    type=PDBFileOrCode,
+    help="Path to a pdb file containing the protein structure",
+)
+parser.add_argument(
+    "-o",
+    "--output",
+    type=Path,
+    help="Path to output directory. If the path already exists, a numerical suffix will be added. Defaults metal_id",
+    default=Path("metal_id"),
+)
+
+args = parser.parse_args()
+
+mtz_above = args.mtz_above
+mtz_below = args.mtz_below
+pdb = args.pdb
+output_dir = args.output
+
+for arg, arg_name in [
+    (mtz_above, "mtz_above"),
+    (mtz_below, "mtz_below"),
+    (pdb, "pdb"),
+    (output_dir, "output_dir"),
+]:
+    logging.info(f"{arg_name} = {arg}")
+
+if output_dir.exists():
+    output_dir = ensure_unique_directory(output_dir)
+
+output_dir.mkdir(parents=True)
+
+METAL_ID_LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {"format": "%(message)s"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "default"},
+        "file": {
+            "class": "logging.FileHandler",
+            "formatter": "default",
+            "filename": f"{output_dir / 'metal_id.log'}",
+            "mode": "w",
+            "encoding": "utf-8",
+        },
+    },
+    "root": {"level": "INFO", "handlers": ["console", "file"]},
+}
+
+logging.config.dictConfig(METAL_ID_LOGGING)
+
+logging.info(f"Running command: {' '.join(sys.argv)}")
+
+logging.info(f"Outputting to: {output_dir}")
+
+# Scale the data
+
+logging.info("\n### Scaling above data relative to the below data ###\n")
+mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir)
+logging.info(f"Scaled above data written to file {mtz_above}")
+
+if pdb.is_file:
+    shutil.copy(pdb.value, output_dir)
+    pdb.value = output_dir / pdb.value.name
+
+dimple_dir_above = output_dir / "dimple_above"
+
+logging.info("\n### Running dimple on the 'above' data ###\n")
+dimple_output = run_dimple(mtz_above, pdb.value, dimple_dir_above)
+logging.info(f"Captured output from dimple: \n {dimple_output.stdout}")
+
+dimple_dir_below = output_dir / "dimple_below"
+pdb_above = dimple_dir_above / "final.pdb"
+pha_above = dimple_dir_above / "anode.pha"
+
+logging.info("\n### Running dimple on the 'below' data ###\n")
+dimple_output = run_dimple(mtz_below, pdb_above, dimple_dir_below)
+logging.info(f"\nCaptured output from dimple: \n {dimple_output.stdout}")
+
+pdb_below = dimple_dir_below / "final.pdb"
+pha_below = dimple_dir_below / "anode.pha"
+
+logging.info("### Calculating map of element location ###\n")
+calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir)
+
+logging.info("\n### End of script ###")
