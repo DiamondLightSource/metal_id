@@ -49,6 +49,8 @@ class PDBFileOrCode:
 
 
 def run_dimple(mtz, pdb, dimple_dir):
+    if isinstance(pdb, list):
+        pdb = " ".join(pdb)
     dimple_command = f"dimple {mtz} {pdb} {dimple_dir} --anode -fpng"
 
     logging.info(f"Running dimple with command:\n\n{dimple_command}\n")

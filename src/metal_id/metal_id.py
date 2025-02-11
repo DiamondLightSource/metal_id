@@ -33,7 +33,8 @@ parser.add_argument(
 parser.add_argument(
     "pdb",
     type=PDBFileOrCode,
-    help="Path to a pdb file containing the protein structure",
+    nargs="*",
+    help="Path to pdb file(s) and/or 4 character PDB codes - To provide multiple, give as comma separated list in []",
 )
 parser.add_argument(
     "-o",
@@ -94,14 +95,17 @@ logging.info("\n### Scaling above data relative to the below data ###\n")
 mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir)
 logging.info(f"Scaled above data written to file {mtz_above}")
 
-if pdb.is_file:
-    shutil.copy(pdb.value, output_dir)
-    pdb.value = output_dir / pdb.value.name
+pdb_files_and_codes = []
+for pdb_file_or_code in pdb:
+    if pdb_file_or_code.is_file:
+        shutil.copy(pdb_file_or_code.value, output_dir)
+        pdb_file_or_code.value = output_dir / pdb_file_or_code.value.name
+    pdb_files_and_codes.append(str(pdb_file_or_code.value))
 
 dimple_dir_above = output_dir / "dimple_above"
 
 logging.info("\n### Running dimple on the 'above' data ###\n")
-dimple_output = run_dimple(mtz_above, pdb.value, dimple_dir_above)
+dimple_output = run_dimple(mtz_above, pdb_files_and_codes, dimple_dir_above)
 logging.info(f"Captured output from dimple: \n {dimple_output.stdout}")
 
 dimple_dir_below = output_dir / "dimple_below"
