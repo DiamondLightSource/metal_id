@@ -43,6 +43,18 @@ parser.add_argument(
     help="Path to output directory. If the path already exists, a numerical suffix will be added. Defaults metal_id",
     default=Path("metal_id"),
 )
+parser.add_argument(
+    "--peak-threshold",
+    type=float,
+    help="Set the peak height threshold that the peaks must exceed in order to be detected",
+    default=5.0,
+)
+parser.add_argument(
+    "--max-peaks",
+    type=int,
+    help="Set the maximum number of peaks to detect",
+    default=10,
+)
 
 args = parser.parse_args()
 
@@ -50,6 +62,9 @@ mtz_above = args.mtz_above
 mtz_below = args.mtz_below
 pdb = args.pdb
 output_dir = args.output
+peak_threshold = args.peak_threshold
+max_peaks = args.max_peaks
+
 
 for arg, arg_name in [
     (mtz_above, "mtz_above"),
@@ -120,6 +135,8 @@ pdb_below = dimple_dir_below / "final.pdb"
 pha_below = dimple_dir_below / "anode.pha"
 
 logging.info("### Calculating map of element location ###\n")
-calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir)
+calc_double_diff_maps(
+    pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
+)
 
 logging.info("\n### End of script ###")
