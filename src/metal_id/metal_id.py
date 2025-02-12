@@ -135,6 +135,8 @@ pdb_below = dimple_dir_below / "final.pdb"
 pha_below = dimple_dir_below / "anode.pha"
 
 logging.info("### Calculating map of element location ###\n")
-calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir)
+calc_double_diff_maps(
+    pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
+)
 
 logging.info("\n### End of script ###")

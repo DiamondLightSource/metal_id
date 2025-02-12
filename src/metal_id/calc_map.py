@@ -197,7 +197,7 @@ def render_diff_map_peaks(
     output_directory,
     pdb_file,
     diff_map,
-    peak_height_threshold,
+    peak_threshold,
     peak_coords,
 ):
     """Plots protein molecule coordinates (pdb file) and difference map in coot, applied a threshold for displaying the map
@@ -214,7 +214,7 @@ def render_diff_map_peaks(
         "set_nomenclature_errors_on_read('ignore')",
         f"read_pdb('{pdb_file}')",
         f"read_ccp4_map('{diff_map}', 1)",
-        f"set_contour_level_in_sigma(1, {peak_height_threshold})",
+        f"set_contour_level_in_sigma(1, {peak_threshold})",
     ]
     render_paths = []
     for _i, peak in enumerate(peak_coords, start=1):
@@ -261,7 +261,9 @@ def render_diff_map_peaks(
         )
 
 
-def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir):
+def calc_double_diff_maps(
+    pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
+):
     pdb_files = [pdb_above, pdb_below]
 
     # Check file inputs
@@ -299,10 +301,6 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
     logging.info("Making double difference map")
     logging.info(f"Using {pdb_file} as reference coordinates for map")
     map_out = output_dir / "diff.map"
-    # Threshold in rmsd for difference map peaks/contours
-    peak_height_threshold = 5.0
-    # Maximum number of peaks to extract from diff map
-    max_peaks = 5
 
     peak_coords, electron_densities, rmsds = make_double_diff_map_and_get_peaks(
         pha_above,
@@ -310,7 +308,7 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
         output_dir,
         pdb_file,
         map_out,
-        peak_height_threshold,
+        peak_threshold,
         max_peaks,
     )
 
@@ -318,7 +316,7 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
 
     # Print the extracted information
     logging.info(
-        f"\nThe largest peaks (up to a maximum of {max_peaks} peaks) found above the threshold of {peak_height_threshold} rmsd:"
+        f"\nThe largest peaks (up to a maximum of {max_peaks} peaks) found above the threshold of {peak_threshold} rmsd:"
     )
 
     peak_file = output_dir / "found_peaks.dat"
@@ -330,6 +328,4 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
             fh.write(line + "\n")
 
     logging.info("\n## Rendering images of peaks ##\n")
-    render_diff_map_peaks(
-        output_dir, pdb_file, map_out, peak_height_threshold, peak_coords
-    )
+    render_diff_map_peaks(output_dir, pdb_file, map_out, peak_threshold, peak_coords)
