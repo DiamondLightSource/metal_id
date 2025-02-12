@@ -169,6 +169,7 @@ def make_double_diff_map_and_get_peaks(
         electron_densities.append(density)
         rmsds.append(rmsd)
         peak_coords.append(xyz)
+
     return peak_coords, electron_densities, rmsds
 
 
@@ -303,7 +304,7 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
     # Maximum number of peaks to extract from diff map
     max_peaks = 5
 
-    (peak_coords, electron_densities, rmsds) = make_double_diff_map_and_get_peaks(
+    peak_coords, electron_densities, rmsds = make_double_diff_map_and_get_peaks(
         pha_above,
         pha_below,
         output_dir,
@@ -319,14 +320,16 @@ def calc_double_diff_maps(pdb_above, pdb_below, pha_above, pha_below, output_dir
     logging.info(
         f"\nThe largest peaks (up to a maximum of {max_peaks} peaks) found above the threshold of {peak_height_threshold} rmsd:"
     )
-    for peak_num, (density, rmsd, xyz) in enumerate(peak_data, start=1):
-        logging.info(
-            f"Peak {peak_num}: Electron Density = {density}, RMSD = {rmsd}, XYZ = {xyz}"
-        )
+
+    peak_file = output_dir / "found_peaks.dat"
+
+    with open(peak_file, "w") as fh:
+        for peak_num, (density, rmsd, xyz) in enumerate(peak_data, start=1):
+            line = f"Peak {peak_num}: Electron Density = {density} e/Å^3, RMSD = {rmsd}, XYZ = {xyz}"
+            logging.info(line)
+            fh.write(line + "\n")
 
     logging.info("\n## Rendering images of peaks ##\n")
     render_diff_map_peaks(
         output_dir, pdb_file, map_out, peak_height_threshold, peak_coords
     )
-
-    logging.info("Metal_ID script finished")
