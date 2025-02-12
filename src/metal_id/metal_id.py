@@ -16,7 +16,7 @@ from calc_map import calc_double_diff_maps
 parser = argparse.ArgumentParser(
     prog="metal_id",
     description="Locate a given element from data collected above and below the element's absorption edge.",
-    usage="%(prog)s mtz_above mtz_below pdb",
+    usage="%(prog)s mtz_above mtz_below pdb [additional pdbs] [options]",
     epilog="metal_id is still in development, if you have any issues with it, please contact Phil Blowey",
 )
 
@@ -34,7 +34,7 @@ parser.add_argument(
     "pdb",
     type=PDBFileOrCode,
     nargs="*",
-    help="Path to pdb file(s) and/or 4 character PDB codes - To provide multiple, give as comma separated list in []",
+    help="Path to pdb file(s) and/or 4 character PDB codes",
 )
 parser.add_argument(
     "-o",
