@@ -37,7 +37,7 @@ def mtz_exists(input_file):
 class PDBFileOrCode:
     def __init__(self, file_or_code):
         if Path(file_or_code).is_file():
-            self.value = Path(file_or_code)
+            self.value = Path(file_or_code).resolve()
             self.is_file = True
         elif len(file_or_code) == 4 and file_or_code.isalnum():
             self.value = str(file_or_code)

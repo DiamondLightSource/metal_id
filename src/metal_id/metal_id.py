@@ -58,10 +58,10 @@ parser.add_argument(
 
 args = parser.parse_args()
 
-mtz_above = args.mtz_above
-mtz_below = args.mtz_below
+mtz_above = args.mtz_above.resolve()
+mtz_below = args.mtz_below.resolve()
 pdb = args.pdb
-output_dir = args.output
+output_dir = args.output.resolve()
 peak_threshold = args.peak_threshold
 max_peaks = args.max_peaks
 
