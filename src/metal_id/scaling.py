@@ -80,12 +80,6 @@ def scale_data(mtz_above, mtz_below, output_dir):
     scaling_dir = output_dir / "scaling"
     scaling_dir.mkdir()
 
-    for input_file in [mtz_above, mtz_below]:
-        shutil.copy(input_file, scaling_dir)
-
-    mtz_above = scaling_dir / mtz_above.name
-    mtz_below = scaling_dir / mtz_below.name
-
     # Ensure that the mtz files have compatible symmetry and put them into the same space group using pointless
     hklout = scaling_dir / f"{mtz_above.stem}_reindexed.mtz"
     pointless_command = [
