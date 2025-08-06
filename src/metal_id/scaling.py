@@ -1,8 +1,8 @@
 import logging
-import shutil
 import subprocess
 
 from iotbx import mtz
+
 
 def calc_amplitudes(mtz_obj, mtz_file, output_dir):
     """
@@ -17,7 +17,7 @@ def calc_amplitudes(mtz_obj, mtz_file, output_dir):
         amplit_file = output_dir / f"{mtz_file.stem}_amplit.mtz"
         truncate_script = [
             f"truncate hklin {mtz_file} hklout {amplit_file} <<END-TRUNCATE",
-            f"labin IMEAN=IMEAN SIGIMEAN=SIGIMEAN",
+            "labin IMEAN=IMEAN SIGIMEAN=SIGIMEAN",
             "labout F=F SIGF=SIGF",
             "NOHARVEST",
             "END",
@@ -46,7 +46,7 @@ def ccp4_command(script, output, output_dir):
     return result.stdout
 
 
-def scale_data(mtz_above, mtz_below, output_dir, fcolumn_label):
+def scale_data(mtz_above, mtz_below, output_dir):
     scaling_dir = output_dir / "scaling"
     scaling_dir.mkdir()
 
@@ -77,7 +77,9 @@ def scale_data(mtz_above, mtz_below, output_dir, fcolumn_label):
         column_labels = mtz_object.crystals()[1].datasets()[0].column_labels()
         for label in essential_labels:
             if label not in column_labels:
-                logging.error(f"Input MTZ file missing essential column label {label} - cannot run metal_id")
+                logging.error(
+                    f"Input MTZ file missing essential column label {label} - cannot run metal_id"
+                )
                 return False
 
     # Calculate structure factors if needed using truncate
@@ -91,13 +93,17 @@ def scale_data(mtz_above, mtz_below, output_dir, fcolumn_label):
     # List of labels to look for in the file
     selected_labels = essential_labels + ["F", "SIGF", "FreeR_flag"]
     # Filtered list of labels that exist in the file
-    selected_labels_der = [label for label in all_labels_der if label in selected_labels]
+    selected_labels_der = [
+        label for label in all_labels_der if label in selected_labels
+    ]
     # Convert list to cad input format
-    labin_der = [f"E{_i}={_label}" for _i, _label in enumerate(selected_labels_der, start=1)]
+    labin_der = [
+        f"E{_i}={_label}" for _i, _label in enumerate(selected_labels_der, start=1)
+    ]
     cad_script = [
         f"cad hklin1 {mtz_above} hklin2 {mtz_below} hklout {mtz_combi} <<END-CAD",
         "TITLE Add data for scaling",
-        f"LABIN FILE 2 E1=F E2=SIGF",
+        "LABIN FILE 2 E1=F E2=SIGF",
         f"LABIN FILE 1 {' '.join(labin_der)}",
         "LABOUT FILE 2 E1=Fscale E2 = SIGFscale",
         "DNAME FILE_NUMBER 2 ALL=refData",
@@ -114,7 +120,7 @@ def scale_data(mtz_above, mtz_below, output_dir, fcolumn_label):
     scaleit_script = [
         f"scaleit hklin {mtz_combi} hklout {mtz_combined_scaled} <<END-SCALEIT",
         "TITLE Scale data using added ref data",
-        f"LABIN FP=Fscale SIGFP=SIGFscale FPH1=F SIGFPH1=SIGF",
+        "LABIN FP=Fscale SIGFP=SIGFscale FPH1=F SIGFPH1=SIGF",
         "AUTO",
         "WEIGHT",
         "REFINE SCALE",

@@ -64,7 +64,6 @@ pdb = args.pdb
 output_dir = args.output.resolve()
 peak_threshold = args.peak_threshold
 max_peaks = args.max_peaks
-fcolumn_label = args.fcolumn
 
 
 for arg, arg_name in [
@@ -108,7 +107,7 @@ logging.info(f"Outputting to: {output_dir}")
 # Scale the data
 
 logging.info("\n### Scaling above data relative to the below data ###\n")
-mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir, fcolumn_label)
+mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir)
 logging.info(f"Scaled above data written to file {mtz_above}")
 
 pdb_files_and_codes = []
