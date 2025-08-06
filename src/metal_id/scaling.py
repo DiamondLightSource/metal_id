@@ -4,35 +4,6 @@ import subprocess
 
 from iotbx import mtz
 
-
-def find_cols_from_type(obj, type, file="mtz_file"):
-    """Get the label and corresponding sigma label for a specifed data type from an mtz file.
-
-    Function takes an iotbx mtz.object and mtz column data-type identifier as input and returns
-    the corresponding column heading and sigma column heading. Function will only return the
-    first column heading of that type.
-    """
-    col_types = obj.column_types()
-    col_labs = obj.column_labels()
-    if type in col_types:
-        indices = [_index for _index, _value in enumerate(col_types) if _value == type]
-        if len(indices) > 1:
-            logging.warning(
-                f"Multiple {mtz.column_type_legend[type]} data columns found in {file}, using the first one"
-            )
-        col_lab = col_labs[indices[0]]
-    else:
-        logging.error(
-            f"Could not find {mtz.column_type_legend[type]} data column in {file}"
-        )
-        return None
-
-    if (sig_col_lab := "SIG" + col_lab) not in col_labs:
-        logging.error(f"Could not find {sig_col_lab} data in {file}")
-        return None
-    return col_lab, sig_col_lab
-
-
 def calc_amplitudes(mtz_obj, mtz_file, output_dir):
     """
     Use truncate to calculate amplitudes from IMEAN data.
@@ -41,13 +12,12 @@ def calc_amplitudes(mtz_obj, mtz_file, output_dir):
     amplitudes. Returns a new mtz_object and file name for the output file
     with suffix: "_amplit.mtz"
     """
-    if "F" not in mtz_obj.column_types():
-        _col_lab, _sig_col_lab = find_cols_from_type(mtz_obj, "J", mtz_file)
+    if "F" not in mtz_obj.column_labels():
         logging.info(f"Amplitude data not in {mtz_file}, running TRUNCATE to calculate")
         amplit_file = output_dir / f"{mtz_file.stem}_amplit.mtz"
         truncate_script = [
             f"truncate hklin {mtz_file} hklout {amplit_file} <<END-TRUNCATE",
-            f"labin IMEAN={_col_lab} SIGIMEAN={_sig_col_lab}",
+            f"labin IMEAN=IMEAN SIGIMEAN=SIGIMEAN",
             "labout F=F SIGF=SIGF",
             "NOHARVEST",
             "END",
@@ -76,7 +46,7 @@ def ccp4_command(script, output, output_dir):
     return result.stdout
 
 
-def scale_data(mtz_above, mtz_below, output_dir):
+def scale_data(mtz_above, mtz_below, output_dir, fcolumn_label):
     scaling_dir = output_dir / "scaling"
     scaling_dir.mkdir()
 
@@ -97,38 +67,37 @@ def scale_data(mtz_above, mtz_below, output_dir):
     # Update mtz_der to the reindexed file path
     mtz_above = hklout
 
-    # Read in mtz files
+    # Read in mtz files as iotbx mtz objects
     obj_below = mtz.object(str(mtz_below))
     obj_above = mtz.object(str(mtz_above))
+
+    # Check that files meet minimum requirements
+    essential_labels = ["IMEAN", "SIGIMEAN", "I(+)", "SIGI(+)", "I(-)", "SIGI(-)"]
+    for mtz_object in [obj_above, obj_below]:
+        column_labels = mtz_object.crystals()[1].datasets()[0].column_labels()
+        for label in essential_labels:
+            if label not in column_labels:
+                logging.error(f"Input MTZ file missing essential column label {label} - cannot run metal_id")
+                return False
 
     # Calculate structure factors if needed using truncate
     obj_below, mtz_below = calc_amplitudes(obj_below, mtz_below, scaling_dir)
     obj_above, mtz_above = calc_amplitudes(obj_above, mtz_above, scaling_dir)
 
-    col_labs = {}
-    col_params = [
-        ("F_nat", "SIGF_nat", obj_below, "F", mtz_below),
-        ("F_der", "SIGF_der", obj_above, "F", mtz_above),
-        ("DANO_der", "SIGDANO_der", obj_above, "D", mtz_above),
-    ]
-
-    for _val, _sigval, obj, type, file in col_params:
-        try:
-            col_labs[_val], col_labs[_sigval] = find_cols_from_type(obj, type, file)
-        except TypeError:
-            logging.error(f"{_val} and/or {_sigval} missing from {file}")
-            return False
-
     # Add the F and SIGF data from one file to the other with cad
     mtz_combi = scaling_dir / f"{mtz_above.stem}_combined.mtz"
     # Get list of column headers excluding hkl
-    col_labs_der = obj_above.crystals()[1].datasets()[0].column_labels()
+    all_labels_der = obj_above.crystals()[1].datasets()[0].column_labels()
+    # List of labels to look for in the file
+    selected_labels = essential_labels + ["F", "SIGF", "FreeR_flag"]
+    # Filtered list of labels that exist in the file
+    selected_labels_der = [label for label in all_labels_der if label in selected_labels]
     # Convert list to cad input format
-    labin_der = [f"E{_i+1}={_label}" for _i, _label in enumerate(col_labs_der)]
+    labin_der = [f"E{_i}={_label}" for _i, _label in enumerate(selected_labels_der, start=1)]
     cad_script = [
         f"cad hklin1 {mtz_above} hklin2 {mtz_below} hklout {mtz_combi} <<END-CAD",
         "TITLE Add data for scaling",
-        f"LABIN FILE 2 E1={col_labs['F_nat']} E2={col_labs['SIGF_nat']}",
+        f"LABIN FILE 2 E1=F E2=SIGF",
         f"LABIN FILE 1 {' '.join(labin_der)}",
         "LABOUT FILE 2 E1=Fscale E2 = SIGFscale",
         "DNAME FILE_NUMBER 2 ALL=refData",
@@ -145,7 +114,7 @@ def scale_data(mtz_above, mtz_below, output_dir):
     scaleit_script = [
         f"scaleit hklin {mtz_combi} hklout {mtz_combined_scaled} <<END-SCALEIT",
         "TITLE Scale data using added ref data",
-        f"LABIN FP=Fscale SIGFP=SIGFscale FPH1={col_labs['F_der']} SIGFPH1={col_labs['SIGF_der']} DPH1={col_labs['DANO_der']} SIGDPH1={col_labs['SIGDANO_der']}",
+        f"LABIN FP=Fscale SIGFP=SIGFscale FPH1=F SIGFPH1=SIGF",
         "AUTO",
         "WEIGHT",
         "REFINE SCALE",
