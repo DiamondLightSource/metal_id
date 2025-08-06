@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(
     prog="metal_id",
     description="Locate a given element from data collected above and below the element's absorption edge.",
     usage="%(prog)s mtz_above mtz_below pdb [additional pdbs] [options]",
-    epilog="metal_id is still in development, if you have any issues with it, please contact Phil Blowey",
+    epilog="metal_id is still in development, if you have any issues with it, please contact Phil Blowey at philip.blowey@diamond.ac.uk",
 )
 
 parser.add_argument(
@@ -40,7 +40,7 @@ parser.add_argument(
     "-o",
     "--output",
     type=Path,
-    help="Path to output directory. If the path already exists, a numerical suffix will be added. Defaults metal_id",
+    help="Path to output directory. If the path already exists, a numerical suffix will be added. Default is metal_id",
     default=Path("metal_id"),
 )
 parser.add_argument(
@@ -64,6 +64,7 @@ pdb = args.pdb
 output_dir = args.output.resolve()
 peak_threshold = args.peak_threshold
 max_peaks = args.max_peaks
+fcolumn_label = args.fcolumn
 
 
 for arg, arg_name in [
@@ -107,7 +108,7 @@ logging.info(f"Outputting to: {output_dir}")
 # Scale the data
 
 logging.info("\n### Scaling above data relative to the below data ###\n")
-mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir)
+mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir, fcolumn_label)
 logging.info(f"Scaled above data written to file {mtz_above}")
 
 pdb_files_and_codes = []
