@@ -100,7 +100,7 @@ METAL_ID_LOGGING = {
 
 logging.config.dictConfig(METAL_ID_LOGGING)
 
-logging.info(f"Running command: {' '.join(sys.argv)}")
+logging.info(f"Running command: metal_id {' '.join(sys.argv[1::])}")
 
 logging.info(f"Outputting to: {output_dir}")
 
