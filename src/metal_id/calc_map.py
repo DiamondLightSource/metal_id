@@ -1,6 +1,5 @@
 import logging
 import math
-import os
 import re
 import shutil
 import subprocess
@@ -131,7 +130,7 @@ def make_double_diff_map_and_get_peaks(
         f"export_map(map_diff, '{map_out}')",
         "coot_real_exit(0)",
     ]
-    coot_script_path = working_directory / "coot_diff_map.py"
+    coot_script_path = working_directory / ".coot_diff_map.py"
     with open(coot_script_path, "w") as script_file:
         for line in coot_script:
             script_file.write(line + "\n")
@@ -257,7 +256,7 @@ def render_diff_map_peaks(
     # Convert r3d files to pngs
     logging.info("Converting r3d files to pngs")
     for render_path in render_paths:
-        render_png_path = f"{os.path.splitext(render_path)[0]}.png"
+        render_png_path = output_directory / f"{render_path.stem}.png"
         logging.info(f"Converting {render_path} to {render_png_path}")
         r3d_command = f"cat {render_path} | render -png {render_png_path}"
         result = subprocess.run(
