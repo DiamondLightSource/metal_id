@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+from pathlib import Path
 
 from iotbx import pdb
 
@@ -263,8 +264,14 @@ def render_diff_map_peaks(
 
 
 def calc_double_diff_maps(
-    pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
-):
+    pdb_above: Path,
+    pdb_below: Path,
+    pha_above: Path,
+    pha_below: Path,
+    output_dir: Path,
+    peak_threshold: float,
+    max_peaks: int,
+) -> dict[str, Path]:
     pdb_files = [pdb_above, pdb_below]
 
     # Check file inputs
@@ -274,7 +281,7 @@ def calc_double_diff_maps(
     ]:
         if not file_path.is_file():
             logging.error(f"Could not find {file_type}, expected at: {file_path}")
-            return False
+            return {}
 
     # Check pdb files
     logging.info(
@@ -287,7 +294,7 @@ def calc_double_diff_maps(
 
     if not pdbs_are_similar:
         logging.error("PDB files are not similar enough, not running metal_id")
-        return False
+        return {}
     logging.info("PDB files are similar enough, continuing with metal_id")
     pdb_file = pdb_files[0]
 
@@ -330,3 +337,5 @@ def calc_double_diff_maps(
 
     logging.info("\n## Rendering images of peaks ##\n")
     render_diff_map_peaks(output_dir, pdb_file, map_out, peak_threshold, peak_coords)
+
+    return {"pdb": output_dir / "final.pdb", "map": map_out}

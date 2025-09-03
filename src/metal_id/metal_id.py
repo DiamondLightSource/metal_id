@@ -8,6 +8,7 @@ from metal_id_helpers import (
     PDBFileOrCode,
     mtz_exists,
     run_dimple,
+    generate_coot_viewer_script,
 )
 from scaling import scale_data
 from calc_map import calc_double_diff_maps
@@ -135,8 +136,17 @@ pdb_below = dimple_dir_below / "final.pdb"
 pha_below = dimple_dir_below / "anode.pha"
 
 logging.info("### Calculating map of element location ###\n")
-calc_double_diff_maps(
+files_out = calc_double_diff_maps(
     pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
 )
+
+if files_out:
+    logging.info("### Generating coot viewer script ###\n")
+    coot_viewer_script = generate_coot_viewer_script(
+        files_out["pdb"], files_out["map"], peak_threshold
+    )
+    logging.info(f"Coot script for viewing results '{coot_viewer_script}' generated\n")
+    logging.info("To use run command:\n")
+    logging.info(f"coot -s {coot_viewer_script}\n")
 
 logging.info("\n### End of script ###")
