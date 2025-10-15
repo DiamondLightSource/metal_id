@@ -5,8 +5,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from iotbx import pdb
-
 
 def view_as_quat(p1, p2):
     """
@@ -37,71 +35,6 @@ def view_as_quat(p1, p2):
     quat = (prod[0], prod[1], prod[2], 1 - d[2])
     qlen = math.sqrt(sum(a * a for a in quat))
     return (quat[0] / qlen, quat[1] / qlen, quat[2] / qlen, quat[3] / qlen)
-
-
-def are_pdbs_similar(file_1, file_2):
-    """
-    Determine if two pdb files have the same crystal symmetry, the same number
-    and type of atoms and sufficiently similar unit cell and atomic coordinates
-    within the defined tolerances
-    """
-
-    def read_pdb(file):
-        """
-        Read a pdb file to get crystal symmetry, atom names and atom coordinates
-        """
-        pdb_obj = pdb.input(file)
-        sym = pdb_obj.crystal_symmetry()
-        atoms = pdb_obj.atoms()
-        atom_names = atoms.extract_name()
-        list_atoms = list(atom_names)
-        atom_coords = atoms.extract_xyz()
-        list_coords = list(atom_coords)
-        return sym, list_atoms, list_coords
-
-    # Read pdb files
-    sym_1, atoms_1, coords_1 = read_pdb(str(file_1))
-    sym_2, atoms_2, coords_2 = read_pdb(str(file_2))
-
-    # Use default if none set tolerances
-    tolerances = {
-        "rel_cell_length": 0.01,
-        "abs_cell_angle": 1.0,
-        "abs_coord_diff": 5.0,  # Units Å
-    }
-
-    # Compare symmetry
-    is_similar_sym = sym_1.is_similar_symmetry(
-        sym_2,
-        relative_length_tolerance=tolerances["rel_cell_length"],
-        absolute_angle_tolerance=tolerances["abs_cell_angle"],
-    )
-    if not is_similar_sym:
-        logging.error("PDB file symmetries are too different")
-        return False
-
-    # Compare atom type/number
-    if atoms_1 != atoms_2:
-        logging.error("Different number or type of atoms in pdb files")
-
-    # Compare atom coordinates
-    combined_coords = zip(coords_1, coords_2)
-    for xyz_1, xyz_2 in combined_coords:
-        # Calculate the distance between xyz_1 and xyz_2
-        diff = abs(
-            (
-                (xyz_1[0] - xyz_2[0]) ** 2
-                + (xyz_1[1] - xyz_2[1]) ** 2
-                + (xyz_1[2] - xyz_2[2]) ** 2
-            )
-            ** 0.5
-        )
-        if diff > tolerances["abs_coord_diff"]:
-            logging.error(
-                f"PDB atom coordinates have difference > tolerance ({tolerances['abs_coord_diff']} Å"
-            )
-            return False
-    return True
 
 
 def make_double_diff_map_and_get_peaks(
@@ -144,8 +77,7 @@ def make_double_diff_map_and_get_peaks(
         text=True,
     )
 
-    with open(working_directory / "metal_id.log", "w") as log_file:
-        log_file.write(result.stdout)
+    logging.info(f"\nCaptured output from coot:\n{result.stdout}")
 
     logging.info("\n## Finding peaks in double difference map ##")
     # Regex pattern to match lines containing peaks from coot output in format: "0 dv: 77.94 n-rmsd: 42.52 xyz = (     24.08,     12.31,     28.48)"
@@ -275,16 +207,13 @@ def render_diff_map_peaks(
 
 
 def calc_double_diff_maps(
-    pdb_above: Path,
-    pdb_below: Path,
+    pdb_file: Path,
     pha_above: Path,
     pha_below: Path,
     output_dir: Path,
     peak_threshold: float,
     max_peaks: int,
 ) -> dict[str, Path]:
-    pdb_files = [pdb_above, pdb_below]
-
     # Check file inputs
     for file_type, file_path in [
         ("AnoDe map above", pha_above),
@@ -293,21 +222,6 @@ def calc_double_diff_maps(
         if not file_path.is_file():
             logging.error(f"Could not find {file_type}, expected at: {file_path}")
             return {}
-
-    # Check pdb files
-    logging.info(
-        f"Checking pdb files for similarity. Files: {pdb_files[0]}, {pdb_files[1]}"
-    )
-    pdbs_are_similar = are_pdbs_similar(
-        pdb_files[0],
-        pdb_files[1],
-    )
-
-    if not pdbs_are_similar:
-        logging.error("PDB files are not similar enough, not running metal_id")
-        return {}
-    logging.info("PDB files are similar enough, continuing with metal_id")
-    pdb_file = pdb_files[0]
 
     logging.info("Copying input files to working directory")
     for file, filename in [
