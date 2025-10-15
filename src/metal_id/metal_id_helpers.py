@@ -2,6 +2,7 @@ from pathlib import Path
 import argparse
 import subprocess
 import logging
+from iotbx import pdb
 
 
 def ensure_unique_directory(path):
@@ -89,3 +90,68 @@ def generate_coot_viewer_script(
             script_file.write(line + "\n")
 
     return viewer_script_path
+
+
+def are_pdbs_similar(file_1, file_2):
+    """
+    Determine if two pdb files have the same crystal symmetry, the same number
+    and type of atoms and sufficiently similar unit cell and atomic coordinates
+    within the defined tolerances
+    """
+
+    def read_pdb(file):
+        """
+        Read a pdb file to get crystal symmetry, atom names and atom coordinates
+        """
+        pdb_obj = pdb.input(file)
+        sym = pdb_obj.crystal_symmetry()
+        atoms = pdb_obj.atoms()
+        atom_names = atoms.extract_name()
+        list_atoms = list(atom_names)
+        atom_coords = atoms.extract_xyz()
+        list_coords = list(atom_coords)
+        return sym, list_atoms, list_coords
+
+    # Read pdb files
+    sym_1, atoms_1, coords_1 = read_pdb(str(file_1))
+    sym_2, atoms_2, coords_2 = read_pdb(str(file_2))
+
+    # Use default if none set tolerances
+    tolerances = {
+        "rel_cell_length": 0.01,
+        "abs_cell_angle": 1.0,
+        "abs_coord_diff": 5.0,  # Units Å
+    }
+
+    # Compare symmetry
+    is_similar_sym = sym_1.is_similar_symmetry(
+        sym_2,
+        relative_length_tolerance=tolerances["rel_cell_length"],
+        absolute_angle_tolerance=tolerances["abs_cell_angle"],
+    )
+    if not is_similar_sym:
+        logging.error("PDB file symmetries are too different")
+        return False
+
+    # Compare atom type/number
+    if atoms_1 != atoms_2:
+        logging.error("Different number or type of atoms in pdb files")
+
+    # Compare atom coordinates
+    combined_coords = zip(coords_1, coords_2)
+    for xyz_1, xyz_2 in combined_coords:
+        # Calculate the distance between xyz_1 and xyz_2
+        diff = abs(
+            (
+                (xyz_1[0] - xyz_2[0]) ** 2
+                + (xyz_1[1] - xyz_2[1]) ** 2
+                + (xyz_1[2] - xyz_2[2]) ** 2
+            )
+            ** 0.5
+        )
+        if diff > tolerances["abs_coord_diff"]:
+            logging.error(
+                f"PDB atom coordinates have difference > tolerance ({tolerances['abs_coord_diff']} Å"
+            )
+            return False
+    return True

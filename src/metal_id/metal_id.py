@@ -9,6 +9,7 @@ from metal_id_helpers import (
     mtz_exists,
     run_dimple,
     generate_coot_viewer_script,
+    are_pdbs_similar,
 )
 from scaling import scale_data
 from calc_map import calc_double_diff_maps
@@ -135,9 +136,27 @@ logging.info(f"\nCaptured output from dimple: \n {dimple_output.stdout}")
 pdb_below = dimple_dir_below / "final.pdb"
 pha_below = dimple_dir_below / "anode.pha"
 
+# Check pdb files
+logging.info(
+    f"\n### Checking pdb files for similarity ###\nFiles: {pdb_above}, {pdb_below}\n"
+)
+pdbs_are_similar = are_pdbs_similar(
+    pdb_above,
+    pdb_below,
+)
+
+if not pdbs_are_similar:
+    logging.error("PDB files output by dimple not similar enough, terminating metal_id")
+    sys.exit(1)
+
+logging.info("PDB files are similar enough, continuing with metal_id")
+dimple_mtz = dimple_dir_above / "final.mtz"
+logging.info("Copying dimple mtz to output directory")
+shutil.copy(dimple_mtz, output_dir / "dimple_final.mtz")
+
 logging.info("### Calculating map of element location ###\n")
 files_out = calc_double_diff_maps(
-    pdb_above, pdb_below, pha_above, pha_below, output_dir, peak_threshold, max_peaks
+    pdb_above, pha_above, pha_below, output_dir, peak_threshold, max_peaks
 )
 
 if files_out:
