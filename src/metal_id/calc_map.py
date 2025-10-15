@@ -3,7 +3,15 @@ import math
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
+
+
+@dataclass
+class PeakData:
+    density: float
+    rmsd: float
+    xyz: tuple[float, float, float]
 
 
 def view_as_quat(p1, p2):
@@ -38,14 +46,14 @@ def view_as_quat(p1, p2):
 
 
 def make_double_diff_map_and_get_peaks(
-    map_above,
-    map_below,
-    working_directory,
-    pdb_file,
-    map_out,
-    rmsd_threshold,
-    max_peaks,
-):
+    map_above: Path,
+    map_below: Path,
+    working_directory: Path,
+    pdb_file: Path,
+    map_out: Path,
+    rmsd_threshold: float,
+    max_peaks: int,
+) -> list[PeakData]:
     """Creates and calls a script in coot to generate a double difference map from the anomalous maps from above and below
     the metal absorption edge. Any peaks above the rmsd_threshold are then found and the coordinates and peak heights in
     units of rmsd and electron density are returned
@@ -85,12 +93,10 @@ def make_double_diff_map_and_get_peaks(
         r"\s*\d+\s+dv:\s*([\d.]+)\s+n-rmsd:\s*([\d.]+)\s+xyz\s*=\s*\(\s*([\d., -]+)\)"
     )
     # Extract peaks from coot output
+    peaks: list[PeakData] = []
     matches = re.finditer(pattern, result.stdout)
-    electron_densities = []
-    rmsds = []
-    peak_coords = []
     for match in matches:
-        if len(peak_coords) == max_peaks:
+        if len(peaks) == max_peaks:
             logging.warning(
                 f"Found more peaks than the set maximum of {max_peaks} - storing only the largest {max_peaks}"
             )
@@ -98,11 +104,11 @@ def make_double_diff_map_and_get_peaks(
         density = float(match.group(1))
         rmsd = float(match.group(2))
         xyz = tuple(map(float, match.group(3).split(",")))
-        electron_densities.append(density)
-        rmsds.append(rmsd)
-        peak_coords.append(xyz)
+        if len(xyz) != 3:
+            raise ValueError(f"Expected 3 coordinates, got {len(xyz)}")
+        peaks.append(PeakData(density=density, rmsd=rmsd, xyz=xyz))
 
-    return peak_coords, electron_densities, rmsds
+    return peaks
 
 
 def find_protein_centre(pdb_file):
@@ -130,7 +136,7 @@ def render_diff_map_peaks(
     pdb_file: Path,
     diff_map: Path,
     peak_threshold: float,
-    peak_coords: list[tuple[float, float, float]],
+    peak_data: list[PeakData],
 ) -> bool:
     """Plots protein molecule coordinates (pdb file) and difference map in coot, applied a threshold for displaying the map
     then renders images centred on the peak_coords, viewing towards the protein centre.
@@ -152,12 +158,13 @@ def render_diff_map_peaks(
         f"set_contour_level_in_sigma(i_map, {peak_threshold})",
     ]
     render_paths = []
-    for _i, peak in enumerate(peak_coords, start=1):
-        quat = view_as_quat(peak, protein_centre)
+    for peak_num, peak in enumerate(peak_data, start=1):
+        peak_coords = peak.xyz
+        quat = view_as_quat(peak_coords, protein_centre)
         # Use relative path as explicit paths can exceed render command length limit
-        render_path = render_dir / f"peak_{_i}.r3d"
+        render_path = render_dir / f"peak_{peak_num}.r3d"
         mini_script = [
-            f"set_rotation_centre{peak}",
+            f"set_rotation_centre{peak_coords}",
             "set_zoom(30.0)",
             f"set_view_quaternion{quat}",
             "graphics_draw()",
@@ -235,7 +242,7 @@ def calc_double_diff_maps(
     logging.info(f"Using {pdb_file} as reference coordinates for map")
     map_out = output_dir / "diff.map"
 
-    peak_coords, electron_densities, rmsds = make_double_diff_map_and_get_peaks(
+    peak_data = make_double_diff_map_and_get_peaks(
         pha_above,
         pha_below,
         output_dir,
@@ -245,22 +252,26 @@ def calc_double_diff_maps(
         max_peaks,
     )
 
-    peak_data = list(zip(electron_densities, rmsds, peak_coords))
+    if not peak_data:
+        logging.info(
+            f"\nNo peaks found above the threshold of {peak_threshold} rmsd.\n"
+        )
 
-    # Print the extracted information
-    logging.info(
-        f"\nThe largest peaks (up to a maximum of {max_peaks} peaks) found above the threshold of {peak_threshold} rmsd:"
-    )
+    else:
+        # Print the extracted information
+        logging.info(
+            f"\nThe largest peaks (up to a maximum of {max_peaks} peaks) found above the threshold of {peak_threshold} rmsd:"
+        )
 
-    peak_file = output_dir / "found_peaks.dat"
+        peak_file = output_dir / "found_peaks.dat"
 
-    with open(peak_file, "w") as fh:
-        for peak_num, (density, rmsd, xyz) in enumerate(peak_data, start=1):
-            line = f"Peak {peak_num}: Electron Density = {density} e/Å^3, RMSD = {rmsd}, XYZ = {xyz}"
-            logging.info(line)
-            fh.write(line + "\n")
+        with open(peak_file, "w") as fh:
+            for peak_num, peak in enumerate(peak_data, start=1):
+                line = f"Peak {peak_num}: Electron Density = {peak.density} e/Å^3, RMSD = {peak.rmsd}, XYZ = {peak.xyz}"
+                logging.info(line)
+                fh.write(line + "\n")
 
-    logging.info("\n## Rendering images of peaks ##\n")
-    render_diff_map_peaks(output_dir, pdb_file, map_out, peak_threshold, peak_coords)
+        logging.info("\n## Rendering images of peaks ##\n")
+        render_diff_map_peaks(output_dir, pdb_file, map_out, peak_threshold, peak_data)
 
     return {"pdb": output_dir / "final.pdb", "map": map_out}

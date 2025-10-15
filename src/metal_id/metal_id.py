@@ -165,7 +165,7 @@ files_out = calc_double_diff_maps(
 )
 
 if files_out:
-    logging.info("### Generating coot viewer script ###\n")
+    logging.info("\n### Generating coot viewer script ###\n")
     coot_viewer_script = generate_coot_viewer_script(
         files_out["pdb"], files_out["map"], peak_threshold
     )
