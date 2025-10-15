@@ -150,11 +150,16 @@ if not pdbs_are_similar:
     sys.exit(1)
 
 logging.info("PDB files are similar enough, continuing with metal_id")
-dimple_mtz = dimple_dir_above / "final.mtz"
-logging.info("Copying dimple mtz to output directory")
-shutil.copy(dimple_mtz, output_dir / "dimple_final.mtz")
+dimple_above_mtz = dimple_dir_above / "final.mtz"
+logging.info("Copying dimple mtzs to output directory")
+for dimple_dir, output_filename in [
+    (dimple_dir_above, "dimple_above.mtz"),
+    (dimple_dir_below, "dimple_below.mtz"),
+]:
+    shutil.copy(dimple_dir / "final.mtz", output_dir / output_filename)
+    logging.info(f"Copied {dimple_dir / 'final.mtz'} to {output_dir / output_filename}")
 
-logging.info("### Calculating map of element location ###\n")
+logging.info("\n### Calculating map of element location ###\n")
 files_out = calc_double_diff_maps(
     pdb_above, pha_above, pha_below, output_dir, peak_threshold, max_peaks
 )
