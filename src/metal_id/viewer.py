@@ -5,11 +5,13 @@ from pathlib import Path
 import gemmi
 import molviewspec as mvs
 import numpy as np
+import os
 import pandas as pd
+import shutil
 import re
 
 
-def parse_peaks(pdb_file, peak_file):
+def parse_peaks(peak_file):
     atoms = []
 
     # Look for matches in format:
@@ -111,7 +113,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
     diff_map = results_directory / "diff.map"
     peak_file = results_directory / "found_peaks.dat"
 
-    atoms_df = parse_peaks(pdb_file, peak_file)
+    atoms_df = parse_peaks(peak_file)
     peaks = len(atoms_df)  # set peaks to length of atoms_df
     heights = atoms_df["Height"]
 
@@ -273,18 +275,25 @@ def gen_html_metal_id(results_directory, isovalue=5):
                     "molstar_show_non_covalent_interactions": True,
                     "molstar_non_covalent_interactions_radius_ang": 5.0,
                 },
-            ).focus()  # .label(text=f"{heights[i-1]} σ",)
+            )
 
             for k in range(peaks):
                 ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
                     format="map"
                 )
-                ccp4.volume().representation(
-                    type="isosurface",
-                    relative_isovalue=isovalue,
-                    show_wireframe=True,
-                    show_faces=False,
-                ).color(color="#da21fa").opacity(opacity=0.25)
+                isosurface_peak = (
+                    ccp4.volume()
+                    .representation(
+                        type="isosurface",
+                        relative_isovalue=isovalue,
+                        show_wireframe=True,
+                        show_faces=False,
+                    )
+                    .color(color="#da21fa")
+                    .opacity(opacity=0.25)
+                )
+                if k == i - 1:
+                    isosurface_peak.focus()  # focus on the current peak site
 
                 ccp42 = builder.download(url=globals()["fmap_file" + str(k + 1)]).parse(
                     format="map"
@@ -329,9 +338,9 @@ def gen_html_metal_id(results_directory, isovalue=5):
         f.write(html)
 
     # clean up
-    # tmpdir = results_directory / "tmp_molviewspec"
-    # shutil.rmtree(str(tmpdir))
-    # os.remove(map_file)
+    tmpdir = results_directory / "tmp_molviewspec"
+    shutil.rmtree(str(tmpdir))
+    os.remove(map_file)
 
 
 gen_html_metal_id(
