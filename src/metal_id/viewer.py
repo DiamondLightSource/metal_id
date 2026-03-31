@@ -165,155 +165,148 @@ def gen_html_metal_id(results_directory, isovalue=5):
         gemmi.NeighborSearch(st[0], cell, 5).populate(include_h=False).populate()
     )  # neighbour search
 
-    for i in range(peaks + 1):
-        if i == 0:  # main page is different to all the others
-            builder = mvs.create_builder()
+    """ Create main page """
+    builder = mvs.create_builder()
 
-            structure = (
-                builder.download(url=pdb_file).parse(format="pdb").model_structure()
-            )  # symmetry_mates_structure()
-            structure.component(selector="polymer").representation(
-                type="surface", size_factor=0.9
-            ).opacity(opacity=0.2).color(color="#AABDF1")
-            structure.component(selector="polymer").representation().opacity(
-                opacity=0.25
-            ).color(custom={"molstar_color_theme_name": "chain_id"})
-            structure.component(selector="ligand").representation(
-                type="ball_and_stick"
-            ).color(custom={"molstar_color_theme_name": "element-symbol"})
-            structure.component(selector="ligand").representation(
-                type="surface"
-            ).opacity(opacity=0.1).color(
-                custom={"molstar_color_theme_name": "element-symbol"}
+    structure = (
+        builder.download(url=pdb_file).parse(format="pdb").model_structure()
+    )  # symmetry_mates_structure()
+    structure.component(selector="polymer").representation(
+        type="surface", size_factor=0.9
+    ).opacity(opacity=0.2).color(color="#AABDF1")
+    structure.component(selector="polymer").representation().opacity(
+        opacity=0.25
+    ).color(custom={"molstar_color_theme_name": "chain_id"})
+    structure.component(selector="ligand").representation(type="ball_and_stick").color(
+        custom={"molstar_color_theme_name": "element-symbol"}
+    )
+    structure.component(selector="ligand").representation(type="surface").opacity(
+        opacity=0.1
+    ).color(custom={"molstar_color_theme_name": "element-symbol"})
+
+    for j in range(peaks):
+        peakcoords = np.array(
+            [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
+        ).tolist()
+        labelcoords = np.array(
+            [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
+        ).tolist()
+        builder.primitives(opacity=0.1).sphere(
+            center=peakcoords,
+            radius=1,
+            color="#da21fa",
+            tooltip=f"peak {j + 1}",
+        ).label(position=labelcoords, text=f"{j + 1}", label_size=5)
+
+    for k in range(peaks):
+        ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
+            format="map"
+        )
+        ccp4.volume().representation(
+            type="isosurface",
+            relative_isovalue=isovalue,
+            show_wireframe=True,
+            show_faces=False,
+        ).color(color="#da21fa").opacity(opacity=0.25)
+
+    builder.camera(position=camerap, target=targetp, up=[0, 0, 1])
+
+    globals()["snapshot_main"] = builder.get_snapshot(
+        title="Main View",
+        description=f"## Metal_ID Results: \n ### Summary \n - Anomalous double difference map shown at {isovalue}σ, magenta for the top {peaks} sites listed in 'found_peaks.dat'",
+        transition_duration_ms=700,
+        linger_duration_ms=5000,
+        key="Main",
+    )
+
+    snapshot_list.append(globals()["snapshot_main"])
+    """ Create individual peak pages """
+    for i in range(peaks):
+        builder = mvs.create_builder()
+
+        structure = (
+            builder.download(url=pdb_file).parse(format="pdb").model_structure()
+        )  # symmetry_mates_structure()
+        structure.component(selector="polymer").representation(
+            type="surface", size_factor=0.9
+        ).opacity(opacity=0.2).color(color="#AABDF1")
+        structure.component(selector="polymer").representation().opacity(
+            opacity=0.25
+        ).color(custom={"molstar_color_theme_name": "chain_id"})
+        structure.component(selector="ligand").representation(
+            type="ball_and_stick"
+        ).color(custom={"molstar_color_theme_name": "element-symbol"})
+        structure.component(selector="ligand").representation(type="surface").opacity(
+            opacity=0.1
+        ).color(custom={"molstar_color_theme_name": "element-symbol"})
+
+        for j in range(peaks):
+            peakcoords = np.array(
+                [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
+            ).tolist()
+            labelcoords = np.array(
+                [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
+            ).tolist()
+            builder.primitives(opacity=0.1).sphere(
+                center=peakcoords,
+                radius=1,
+                color="#da21fa",
+                tooltip=f"peak {j + 1}",
+            ).label(position=labelcoords, text=f"{j + 1}", label_size=2)  # spheres
+
+        nearest_atom_mark = ns.find_nearest_atom(
+            gemmi.Position(atoms_df["x"][i], atoms_df["y"][i], atoms_df["z"][i])
+        )
+        residue = mvs.ComponentExpression(
+            atom_id=st[0][nearest_atom_mark.chain_idx][nearest_atom_mark.residue_idx][
+                nearest_atom_mark.atom_idx
+            ].serial
+        )  # nearest atom id
+        structure.component(
+            selector=residue,
+            custom={
+                "molstar_show_non_covalent_interactions": True,
+                "molstar_non_covalent_interactions_radius_ang": 5.0,
+            },
+        )
+
+        for k in range(peaks):
+            ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
+                format="map"
             )
-
-            for j in range(peaks):
-                peakcoords = np.array(
-                    [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-                ).tolist()
-                labelcoords = np.array(
-                    [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-                ).tolist()
-                builder.primitives(opacity=0.1).sphere(
-                    center=peakcoords,
-                    radius=1,
-                    color="#da21fa",
-                    tooltip=f"peak {j + 1}",
-                ).label(position=labelcoords, text=f"{j + 1}", label_size=5)
-
-            for k in range(peaks):
-                ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
-                    format="map"
-                )
-                ccp4.volume().representation(
+            isosurface_peak = (
+                ccp4.volume()
+                .representation(
                     type="isosurface",
                     relative_isovalue=isovalue,
                     show_wireframe=True,
                     show_faces=False,
-                ).color(color="#da21fa").opacity(opacity=0.25)
-
-            builder.camera(position=camerap, target=targetp, up=[0, 0, 1])
-
-            globals()["snapshot" + str(i + 1)] = builder.get_snapshot(
-                title="Main View",
-                description=f"## Metal_ID Results: \n ### Summary \n - Anomalous double difference map shown at {isovalue}σ, magenta for the top {peaks} sites listed in 'found_peaks.dat'",
-                transition_duration_ms=700,
-                linger_duration_ms=5000,
-                key="Main",
-            )
-
-            snapshot_list.append(globals()["snapshot" + str(i + 1)])
-
-        else:
-            builder = mvs.create_builder()
-
-            structure = (
-                builder.download(url=pdb_file).parse(format="pdb").model_structure()
-            )  # symmetry_mates_structure()
-            structure.component(selector="polymer").representation(
-                type="surface", size_factor=0.9
-            ).opacity(opacity=0.2).color(color="#AABDF1")
-            structure.component(selector="polymer").representation().opacity(
-                opacity=0.25
-            ).color(custom={"molstar_color_theme_name": "chain_id"})
-            structure.component(selector="ligand").representation(
-                type="ball_and_stick"
-            ).color(custom={"molstar_color_theme_name": "element-symbol"})
-            structure.component(selector="ligand").representation(
-                type="surface"
-            ).opacity(opacity=0.1).color(
-                custom={"molstar_color_theme_name": "element-symbol"}
-            )
-
-            for j in range(peaks):
-                peakcoords = np.array(
-                    [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-                ).tolist()
-                labelcoords = np.array(
-                    [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-                ).tolist()
-                builder.primitives(opacity=0.1).sphere(
-                    center=peakcoords,
-                    radius=1,
-                    color="#da21fa",
-                    tooltip=f"peak {j + 1}",
-                ).label(position=labelcoords, text=f"{j + 1}", label_size=2)  # spheres
-
-            nearest_atom_mark = ns.find_nearest_atom(
-                gemmi.Position(
-                    atoms_df["x"][i - 1], atoms_df["y"][i - 1], atoms_df["z"][i - 1]
                 )
+                .color(color="#da21fa")
+                .opacity(opacity=0.25)
             )
-            residue = mvs.ComponentExpression(
-                atom_id=st[0][nearest_atom_mark.chain_idx][
-                    nearest_atom_mark.residue_idx
-                ][nearest_atom_mark.atom_idx].serial
-            )  # nearest atom id
-            structure.component(
-                selector=residue,
-                custom={
-                    "molstar_show_non_covalent_interactions": True,
-                    "molstar_non_covalent_interactions_radius_ang": 5.0,
-                },
-            )
+            if k == i:
+                isosurface_peak.focus()  # focus on the current peak site
 
-            for k in range(peaks):
-                ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
-                    format="map"
-                )
-                isosurface_peak = (
-                    ccp4.volume()
-                    .representation(
-                        type="isosurface",
-                        relative_isovalue=isovalue,
-                        show_wireframe=True,
-                        show_faces=False,
-                    )
-                    .color(color="#da21fa")
-                    .opacity(opacity=0.25)
-                )
-                if k == i - 1:
-                    isosurface_peak.focus()  # focus on the current peak site
+            ccp42 = builder.download(url=globals()["fmap_file" + str(k + 1)]).parse(
+                format="map"
+            )  # 2fo-fc
+            ccp42.volume().representation(
+                type="isosurface",
+                relative_isovalue=1.5,
+                show_wireframe=True,
+                show_faces=False,
+            ).color(color="#2f78d7").opacity(opacity=0.25)
 
-                ccp42 = builder.download(url=globals()["fmap_file" + str(k + 1)]).parse(
-                    format="map"
-                )  # 2fo-fc
-                ccp42.volume().representation(
-                    type="isosurface",
-                    relative_isovalue=1.5,
-                    show_wireframe=True,
-                    show_faces=False,
-                ).color(color="#2f78d7").opacity(opacity=0.25)
+        globals()["snapshot" + str(i + 1)] = builder.get_snapshot(
+            title=f"Site {i}",
+            description=f"## Metal_ID Results: \n ### Site {i} \n - Displaying unique site {i}, height {heights[i]} σ \n - Anomolous double difference map {isovalue}σ, magenta \n - 2FO-FC at 1.5σ, blue \n \n [Back to Main Summary Page](#Main)",
+            transition_duration_ms=700,
+            linger_duration_ms=5000,
+            key="site1",
+        )
 
-            globals()["snapshot" + str(i + 1)] = builder.get_snapshot(
-                title=f"Site {i}",
-                description=f"## Anode Results: \n ### Site {i} \n - Displaying unique site {i}, height {heights[i - 1]} σ \n - Anomolous double difference map {isovalue}σ, magenta \n - 2FO-FC at 1.5σ, blue \n \n [Back to Main Summary Page](#Main)",
-                transition_duration_ms=700,
-                linger_duration_ms=5000,
-                key="site1",
-            )
-
-            snapshot_list.append(globals()["snapshot" + str(i + 1)])
+        snapshot_list.append(globals()["snapshot" + str(i + 1)])
 
     with open(pdb_file) as f:
         pdb_data = f.read()
