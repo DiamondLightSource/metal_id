@@ -1,18 +1,20 @@
 from __future__ import annotations
 
+from collections import namedtuple
 from pathlib import Path
 
 import gemmi
 import molviewspec as mvs
 import numpy as np
 import os
-import pandas as pd
 import shutil
 import re
 
+Peak = namedtuple("Peak", ["x", "y", "z", "height"])
 
-def parse_peaks(peak_file):
-    atoms = []
+
+def parse_peaks(peak_file: Path) -> list[Peak]:
+    peaks = []
 
     # Look for matches in format:
     # Peak 1: Electron Density = 77.93 e/Å^3, RMSD = 42.52, XYZ = (24.08, 12.31, 28.48)
@@ -31,15 +33,13 @@ def parse_peaks(peak_file):
                     float, (match.group("x"), match.group("y"), match.group("z"))
                 )
                 height = float(match.group("rmsd"))
-                atoms.append([xf, yf, zf, height])
+                peaks.append(Peak(xf, yf, zf, height))
 
-    atoms_df = pd.DataFrame(atoms, columns=["x", "y", "z", "Height"])
-
-    return atoms_df
+    return peaks
 
 
 def save_cropped_maps(
-    pdb_file, map_file, atoms_df, peaks, radius, prefix, results_directory
+    pdb_file, map_file, peaks_list, radius, prefix, results_directory
 ):
     st = gemmi.read_structure(pdb_file.as_posix())
     cell = st.cell
@@ -47,17 +47,15 @@ def save_cropped_maps(
     tmpdir = Path(results_directory) / "tmp_molviewspec"
     tmpdir.mkdir(parents=False, exist_ok=True)
 
-    for i in range(peaks):
+    for i, peak in enumerate(peaks_list, start=1):
         m = gemmi.read_ccp4_map(map_file.as_posix(), setup=True)
         grid = m.grid
 
         mask = grid.clone()
         mask.fill(0.0)
 
-        map_out = f"{prefix}{i + 1}.map"  #
-        center = gemmi.Position(
-            atoms_df["x"][i], atoms_df["y"][i], atoms_df["z"][i]
-        )  # peak loc
+        map_out = f"{prefix}{i}.map"  #
+        center = gemmi.Position(peak.x, peak.y, peak.z)
 
         mask.set_points_around(center, radius, 1.0, use_pbc=True)  # spherical mask in Å
 
@@ -107,15 +105,60 @@ def mtz_to_map(mtz_file, map_file, label="FWT", ph_label="PHWT"):
     ccp4.write_ccp4_map(map_file.as_posix())
 
 
+def generate_spheres(builder: mvs.Builder, peaks: list[Peak]):
+    for peak_num, peak in enumerate(peaks, start=1):
+        peakcoords = np.array([peak.x, peak.y, peak.z]).tolist()
+        labelcoords = np.array([peak.x, peak.y, peak.z]).tolist()
+        builder.primitives(opacity=0.1).sphere(
+            center=peakcoords,
+            radius=1,
+            color="#da21fa",
+            tooltip=f"peak {peak_num}",
+        ).label(position=labelcoords, text=f"{peak_num}", label_size=2)
+
+
+def generate_isosurfaces_and_focus_on_current(
+    builder: mvs.Builder,
+    peaks: list[Peak],
+    focus_peak_num: int,
+    map_files: dict,
+    fmap_files: dict,
+    isovalue=5,
+):
+    for peak_num, _ in enumerate(peaks, start=1):
+        # Add anomalous double difference map for the current peak
+        ccp4 = builder.download(url=map_files[peak_num]).parse(format="map")
+        isosurface_peak = (
+            ccp4.volume()
+            .representation(
+                type="isosurface",
+                relative_isovalue=isovalue,
+                show_wireframe=True,
+                show_faces=False,
+            )
+            .color(color="#da21fa")
+            .opacity(opacity=0.25)
+        )
+        if peak_num == focus_peak_num:
+            isosurface_peak.focus()  # focus on the current peak site
+
+        # Add 2FO-FC map for the current peak
+        ccp4_2fo_fc = builder.download(url=fmap_files[peak_num]).parse(format="map")
+        ccp4_2fo_fc.volume().representation(
+            type="isosurface",
+            relative_isovalue=1.5,
+            show_wireframe=True,
+            show_faces=False,
+        ).color(color="#2f78d7").opacity(opacity=0.25)
+
+
 def gen_html_metal_id(results_directory, isovalue=5):
     pdb_file = results_directory / "final.pdb"
     mtz_file = results_directory / "dimple_below.mtz"
     diff_map = results_directory / "diff.map"
     peak_file = results_directory / "found_peaks.dat"
 
-    atoms_df = parse_peaks(peak_file)
-    peaks = len(atoms_df)  # set peaks to length of atoms_df
-    heights = atoms_df["Height"]
+    peaks = parse_peaks(peak_file)
 
     # convert dimple mtz to map format
     map_file = results_directory / "final.map"
@@ -124,8 +167,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
     save_cropped_maps(
         pdb_file,
         diff_map,
-        atoms_df,
-        peaks=peaks,
+        peaks,
         radius=3,
         prefix="box",
         results_directory=results_directory,
@@ -134,8 +176,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
     save_cropped_maps(
         pdb_file,
         map_file,
-        atoms_df,
-        peaks=peaks,
+        peaks,
         radius=6,
         prefix="fbox",
         results_directory=results_directory,
@@ -144,21 +185,22 @@ def gen_html_metal_id(results_directory, isovalue=5):
     st = gemmi.read_structure(pdb_file.as_posix())
     cell = st.cell
 
+    # Store map files and data in dictionaries indexed by peak number
+    map_files = {}
+    fmap_files = {}
+    map_data_dict = {}
+    fmap_data_dict = {}
     snapshot_list = []
 
-    for j in range(peaks):
-        globals()["map_file" + str(j + 1)] = (
-            f"{results_directory}/tmp_molviewspec/box{j + 1}.map"
-        )
-        globals()["fmap_file" + str(j + 1)] = (
-            f"{results_directory}/tmp_molviewspec/fbox{j + 1}.map"
-        )
+    for peak_num, peak in enumerate(peaks, start=1):
+        map_files[peak_num] = f"{results_directory}/tmp_molviewspec/box{peak_num}.map"
+        fmap_files[peak_num] = f"{results_directory}/tmp_molviewspec/fbox{peak_num}.map"
 
-        with open(globals()["map_file" + str(j + 1)], mode="rb") as f:
-            globals()["map_data" + str(j + 1)] = f.read()
+        with open(map_files[peak_num], mode="rb") as f:
+            map_data_dict[peak_num] = f.read()
 
-        with open(globals()["fmap_file" + str(j + 1)], mode="rb") as f:
-            globals()["fmap_data" + str(j + 1)] = f.read()
+        with open(fmap_files[peak_num], mode="rb") as f:
+            fmap_data_dict[peak_num] = f.read()
 
     targetp, camerap = find_camera_pos(st)
     ns = (
@@ -184,24 +226,17 @@ def gen_html_metal_id(results_directory, isovalue=5):
         opacity=0.1
     ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
-    for j in range(peaks):
-        peakcoords = np.array(
-            [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-        ).tolist()
-        labelcoords = np.array(
-            [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-        ).tolist()
+    for peak_num, peak in enumerate(peaks, start=1):
+        peakcoords = np.array([peak.x, peak.y, peak.z]).tolist()
+        labelcoords = np.array([peak.x, peak.y, peak.z]).tolist()
         builder.primitives(opacity=0.1).sphere(
             center=peakcoords,
             radius=1,
             color="#da21fa",
-            tooltip=f"peak {j + 1}",
-        ).label(position=labelcoords, text=f"{j + 1}", label_size=5)
+            tooltip=f"peak {peak_num}",
+        ).label(position=labelcoords, text=f"{peak_num}", label_size=5)
 
-    for k in range(peaks):
-        ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
-            format="map"
-        )
+        ccp4 = builder.download(url=map_files[peak_num]).parse(format="map")
         ccp4.volume().representation(
             type="isosurface",
             relative_isovalue=isovalue,
@@ -211,17 +246,17 @@ def gen_html_metal_id(results_directory, isovalue=5):
 
     builder.camera(position=camerap, target=targetp, up=[0, 0, 1])
 
-    globals()["snapshot_main"] = builder.get_snapshot(
+    snapshot_main = builder.get_snapshot(
         title="Main View",
-        description=f"## Metal_ID Results: \n ### Summary \n - Anomalous double difference map shown at {isovalue}σ, magenta for the top {peaks} sites listed in 'found_peaks.dat'",
+        description=f"## Metal_ID Results: \n ### Summary \n - Anomalous double difference map shown at {isovalue}σ, magenta for the top {len(peaks)} sites listed in 'found_peaks.dat'",
         transition_duration_ms=700,
         linger_duration_ms=5000,
         key="Main",
     )
 
-    snapshot_list.append(globals()["snapshot_main"])
+    snapshot_list.append(snapshot_main)
     """ Create individual peak pages """
-    for i in range(peaks):
+    for peak_num, peak in enumerate(peaks, start=1):
         builder = mvs.create_builder()
 
         structure = (
@@ -240,22 +275,10 @@ def gen_html_metal_id(results_directory, isovalue=5):
             opacity=0.1
         ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
-        for j in range(peaks):
-            peakcoords = np.array(
-                [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-            ).tolist()
-            labelcoords = np.array(
-                [atoms_df["x"][j], atoms_df["y"][j], atoms_df["z"][j]]
-            ).tolist()
-            builder.primitives(opacity=0.1).sphere(
-                center=peakcoords,
-                radius=1,
-                color="#da21fa",
-                tooltip=f"peak {j + 1}",
-            ).label(position=labelcoords, text=f"{j + 1}", label_size=2)  # spheres
-
+        generate_spheres(builder, peaks)
+        current_peak = peaks[peak_num - 1]
         nearest_atom_mark = ns.find_nearest_atom(
-            gemmi.Position(atoms_df["x"][i], atoms_df["y"][i], atoms_df["z"][i])
+            gemmi.Position(current_peak.x, current_peak.y, current_peak.z)
         )
         residue = mvs.ComponentExpression(
             atom_id=st[0][nearest_atom_mark.chain_idx][nearest_atom_mark.residue_idx][
@@ -270,56 +293,28 @@ def gen_html_metal_id(results_directory, isovalue=5):
             },
         )
 
-        for k in range(peaks):
-            ccp4 = builder.download(url=globals()["map_file" + str(k + 1)]).parse(
-                format="map"
-            )
-            isosurface_peak = (
-                ccp4.volume()
-                .representation(
-                    type="isosurface",
-                    relative_isovalue=isovalue,
-                    show_wireframe=True,
-                    show_faces=False,
-                )
-                .color(color="#da21fa")
-                .opacity(opacity=0.25)
-            )
-            if k == i:
-                isosurface_peak.focus()  # focus on the current peak site
+        generate_isosurfaces_and_focus_on_current(
+            builder, peaks, peak_num, map_files, fmap_files, isovalue=isovalue
+        )
 
-            ccp42 = builder.download(url=globals()["fmap_file" + str(k + 1)]).parse(
-                format="map"
-            )  # 2fo-fc
-            ccp42.volume().representation(
-                type="isosurface",
-                relative_isovalue=1.5,
-                show_wireframe=True,
-                show_faces=False,
-            ).color(color="#2f78d7").opacity(opacity=0.25)
-
-        globals()["snapshot" + str(i + 1)] = builder.get_snapshot(
-            title=f"Site {i}",
-            description=f"## Metal_ID Results: \n ### Site {i} \n - Displaying unique site {i}, height {heights[i]} σ \n - Anomolous double difference map {isovalue}σ, magenta \n - 2FO-FC at 1.5σ, blue \n \n [Back to Main Summary Page](#Main)",
+        snapshot = builder.get_snapshot(
+            title=f"Site {peak_num}",
+            description=f"## Metal_ID Results: \n ### Site {peak_num} \n - Displaying unique site {peak_num}, height {peak.height} σ \n - Anomalous double difference map {isovalue}σ, magenta \n - 2FO-FC at 1.5σ, blue \n \n [Back to Main Summary Page](#Main)",
             transition_duration_ms=700,
             linger_duration_ms=5000,
             key="site1",
         )
 
-        snapshot_list.append(globals()["snapshot" + str(i + 1)])
+        snapshot_list.append(snapshot)
 
     with open(pdb_file) as f:
         pdb_data = f.read()
 
+    # Build data dictionary for molstar
     data_dict = {}
-    for i in range(peaks):
-        key = globals()["map_file" + str(i + 1)]
-        value = globals()["map_data" + str(i + 1)]
-        data_dict[key] = value
-
-        key = globals()["fmap_file" + str(i + 1)]
-        value = globals()["fmap_data" + str(i + 1)]
-        data_dict[key] = value
+    for key, value in map_data_dict.items():
+        data_dict[map_files[key]] = value
+        data_dict[fmap_files[key]] = fmap_data_dict[key]
 
     data_dict[pdb_file.as_posix()] = pdb_data
 
