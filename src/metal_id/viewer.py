@@ -309,25 +309,5 @@ def gen_html_metal_id(
         f.write(html)
 
     # clean up
-    tmpdir = results_directory / "tmp_molviewspec"
     shutil.rmtree(str(tmpdir))
     os.remove(map_file)
-
-
-gen_html_metal_id(
-    results_directory=Path(
-        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id"
-    ),
-    pdb_file=Path(
-        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/final.pdb"
-    ),
-    mtz_file=Path(
-        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/dimple_below.mtz"
-    ),
-    diff_map_file=Path(
-        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/diff.map"
-    ),
-    peak_file=Path(
-        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/found_peaks.dat"
-    ),
-)
