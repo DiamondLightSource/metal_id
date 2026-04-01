@@ -38,35 +38,39 @@ def parse_peaks(peak_file: Path) -> list[Peak]:
 
 
 def save_cropped_maps(
-    pdb_file, map_file, peaks_list, radius, prefix, results_directory
+    pdb_file: Path,
+    map_file: Path,
+    peak: Peak,
+    radius: float,
+    filename: str,
+    tmpdir: Path,
 ):
-    st = gemmi.read_structure(pdb_file.as_posix())
-    cell = st.cell
+    structure = gemmi.read_structure(pdb_file.as_posix())
+    cell = structure.cell
 
-    tmpdir = Path(results_directory) / "tmp_molviewspec"
-    tmpdir.mkdir(parents=False, exist_ok=True)
+    map = gemmi.read_ccp4_map(map_file.as_posix(), setup=True)
+    grid = map.grid
 
-    for i, peak in enumerate(peaks_list, start=1):
-        m = gemmi.read_ccp4_map(map_file.as_posix(), setup=True)
-        grid = m.grid
+    mask = grid.clone()
+    mask.fill(0.0)
 
-        mask = grid.clone()
-        mask.fill(0.0)
+    map_out = f"{filename}.map"  #
+    center = gemmi.Position(peak.x, peak.y, peak.z)
 
-        map_out = f"{prefix}{i}.map"  #
-        center = gemmi.Position(peak.x, peak.y, peak.z)
+    mask.set_points_around(center, radius, 1.0, use_pbc=True)  # spherical mask in Å
 
-        mask.set_points_around(center, radius, 1.0, use_pbc=True)  # spherical mask in Å
+    dl = gemmi.Position(radius, radius, radius)  # box d/2
+    box = gemmi.FractionalBox()
+    box.extend(cell.fractionalize(center - dl))
+    box.extend(cell.fractionalize(center + dl))
 
-        dl = gemmi.Position(radius, radius, radius)  # box d/2
-        box = gemmi.FractionalBox()
-        box.extend(cell.fractionalize(center - dl))
-        box.extend(cell.fractionalize(center + dl))
-
-        grid.array[:] *= mask.array
-        m.set_extent(box)
-        outfile = str(f"{tmpdir}/{map_out}")
-        m.write_ccp4_map(outfile)
+    grid.array[:] *= mask.array
+    map.set_extent(box)
+    outfile = str(f"{tmpdir}/{map_out}")
+    map.write_ccp4_map(outfile)
+    with open(outfile, "rb") as f:
+        map_data = f.read()
+    return map_data
 
 
 def find_camera_pos(structure: gemmi.Structure):
@@ -118,13 +122,11 @@ def generate_isosurfaces_and_focus_on_current(
     builder: mvs.Builder,
     peaks: list[Peak],
     focus_peak_num: int,
-    map_files: dict,
-    fmap_files: dict,
     isovalue=5,
 ):
     for peak_num, _ in enumerate(peaks, start=1):
         # Add anomalous double difference map for the current peak
-        ccp4 = builder.download(url=map_files[peak_num]).parse(format="map")
+        ccp4 = builder.download(url=f"map{peak_num}").parse(format="map")
         isosurface_peak = (
             ccp4.volume()
             .representation(
@@ -140,7 +142,7 @@ def generate_isosurfaces_and_focus_on_current(
             isosurface_peak.focus()  # focus on the current peak site
 
         # Add 2FO-FC map for the current peak
-        ccp4_2fo_fc = builder.download(url=fmap_files[peak_num]).parse(format="map")
+        ccp4_2fo_fc = builder.download(url=f"fmap{peak_num}").parse(format="map")
         ccp4_2fo_fc.volume().representation(
             type="isosurface",
             relative_isovalue=1.5,
@@ -161,54 +163,46 @@ def gen_html_metal_id(results_directory, isovalue=5):
     map_file = results_directory / "final.map"
     mtz_to_map(mtz_file, map_file)
 
-    save_cropped_maps(
-        pdb_file,
-        diff_map,
-        peaks,
-        radius=3,
-        prefix="box",
-        results_directory=results_directory,
-    )
+    tmpdir = Path(results_directory) / "tmp_molviewspec"
+    tmpdir.mkdir(parents=False, exist_ok=True)
 
-    save_cropped_maps(
-        pdb_file,
-        map_file,
-        peaks,
-        radius=6,
-        prefix="fbox",
-        results_directory=results_directory,
-    )  # 2fofc
+    data_dict = {}
+    for peak_num, peak in enumerate(peaks, start=1):
+        # Anomalous double difference map
+        map_data = save_cropped_maps(
+            pdb_file,
+            diff_map,
+            peak,
+            radius=3,
+            filename=f"box{peak_num}",
+            tmpdir=tmpdir,
+        )
+        # 2FO-FC map
+        fmap_data = save_cropped_maps(
+            pdb_file,
+            map_file,
+            peak,
+            radius=6,
+            filename=f"fbox{peak_num}",
+            tmpdir=tmpdir,
+        )
+        data_dict[f"map{peak_num}"] = map_data
+        data_dict[f"fmap{peak_num}"] = fmap_data
 
     st = gemmi.read_structure(pdb_file.as_posix())
     cell = st.cell
 
     # Store map files and data in dictionaries indexed by peak number
-    map_files = {}
-    fmap_files = {}
-    map_data_dict = {}
-    fmap_data_dict = {}
     snapshot_list = []
 
-    for peak_num, peak in enumerate(peaks, start=1):
-        map_files[peak_num] = f"{results_directory}/tmp_molviewspec/box{peak_num}.map"
-        fmap_files[peak_num] = f"{results_directory}/tmp_molviewspec/fbox{peak_num}.map"
-
-        with open(map_files[peak_num], mode="rb") as f:
-            map_data_dict[peak_num] = f.read()
-
-        with open(fmap_files[peak_num], mode="rb") as f:
-            fmap_data_dict[peak_num] = f.read()
-
     targetp, camerap = find_camera_pos(st)
-    ns = (
-        gemmi.NeighborSearch(st[0], cell, 5).populate(include_h=False).populate()
-    )  # neighbour search
+    ns = gemmi.NeighborSearch(st[0], cell, 5).populate(include_h=False).populate()
 
     """ Create main page """
     builder = mvs.create_builder()
 
     structure = (
-        builder.download(url=pdb_file).parse(format="pdb").model_structure()
+        builder.download(url="pdb").parse(format="pdb").model_structure()
     )  # symmetry_mates_structure()
     structure.component(selector="polymer").representation(
         type="surface", size_factor=0.9
@@ -232,7 +226,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
             tooltip=f"peak {peak_num}",
         ).label(position=peakcoords, text=f"{peak_num}", label_size=5)
 
-        ccp4 = builder.download(url=map_files[peak_num]).parse(format="map")
+        ccp4 = builder.download(url=f"map{peak_num}").parse(format="map")
         ccp4.volume().representation(
             type="isosurface",
             relative_isovalue=isovalue,
@@ -256,7 +250,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
         builder = mvs.create_builder()
 
         structure = (
-            builder.download(url=pdb_file).parse(format="pdb").model_structure()
+            builder.download(url="pdb").parse(format="pdb").model_structure()
         )  # symmetry_mates_structure()
         structure.component(selector="polymer").representation(
             type="surface", size_factor=0.9
@@ -290,7 +284,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
         )
 
         generate_isosurfaces_and_focus_on_current(
-            builder, peaks, peak_num, map_files, fmap_files, isovalue=isovalue
+            builder, peaks, peak_num, isovalue=isovalue
         )
 
         snapshot = builder.get_snapshot(
@@ -306,13 +300,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
     with open(pdb_file) as f:
         pdb_data = f.read()
 
-    # Build data dictionary for molstar
-    data_dict = {}
-    for key, value in map_data_dict.items():
-        data_dict[map_files[key]] = value
-        data_dict[fmap_files[key]] = fmap_data_dict[key]
-
-    data_dict[pdb_file.as_posix()] = pdb_data
+    data_dict["pdb"] = pdb_data
 
     states = mvs.States(
         snapshots=snapshot_list, metadata=mvs.GlobalMetadata(description="metal_id")
@@ -331,5 +319,4 @@ gen_html_metal_id(
     results_directory=Path(
         "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id"
     ),
-    isovalue=5,
 )
