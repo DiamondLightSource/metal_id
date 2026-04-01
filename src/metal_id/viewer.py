@@ -118,7 +118,7 @@ def generate_spheres(builder: mvs.Builder, peaks: list[Peak]):
         ).label(position=peakcoords, text=f"{peak_num}", label_size=2)
 
 
-def generate_isosurfaces_and_focus_on_current(
+def generate_isosurfaces_and_focus_on_current_peak(
     builder: mvs.Builder,
     peaks: list[Peak],
     focus_peak_num: int,
@@ -268,10 +268,7 @@ def gen_html_metal_id(
         ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
         generate_spheres(builder, peaks)
-        current_peak = peaks[peak_num - 1]
-        nearest_atom_mark = ns.find_nearest_atom(
-            gemmi.Position(current_peak.x, current_peak.y, current_peak.z)
-        )
+        nearest_atom_mark = ns.find_nearest_atom(gemmi.Position(peak.x, peak.y, peak.z))
         residue = mvs.ComponentExpression(
             atom_id=st[0][nearest_atom_mark.chain_idx][nearest_atom_mark.residue_idx][
                 nearest_atom_mark.atom_idx
@@ -285,7 +282,7 @@ def gen_html_metal_id(
             },
         )
 
-        generate_isosurfaces_and_focus_on_current(
+        generate_isosurfaces_and_focus_on_current_peak(
             builder, peaks, peak_num, isovalue=isovalue
         )
 
