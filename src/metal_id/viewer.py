@@ -319,7 +319,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
     data_dict[pdb_file.as_posix()] = pdb_data
 
     states = mvs.States(
-        snapshots=snapshot_list, metadata=mvs.GlobalMetadata(description="anode")
+        snapshots=snapshot_list, metadata=mvs.GlobalMetadata(description="metal_id")
     )
     html = mvs.molstar_widgets.molstar_html(states, data=data_dict, ui="stories")
     with open(f"{results_directory}/metal_id.html", "w") as f:
