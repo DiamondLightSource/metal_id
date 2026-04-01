@@ -5,7 +5,6 @@ from pathlib import Path
 
 import gemmi
 import molviewspec as mvs
-import numpy as np
 import os
 import shutil
 import re
@@ -79,7 +78,6 @@ def find_camera_pos(structure: gemmi.Structure):
         for atom in residue
     ]
     a, b, c, d = gemmi.find_best_plane(atoms)
-    # normal = gemmi.Vec3(a, b, c)
 
     targetp = gemmi.Position(0, 0, 0)
     # The center can be taken as the centroid of the input atoms projected onto the plane
@@ -107,14 +105,13 @@ def mtz_to_map(mtz_file, map_file, label="FWT", ph_label="PHWT"):
 
 def generate_spheres(builder: mvs.Builder, peaks: list[Peak]):
     for peak_num, peak in enumerate(peaks, start=1):
-        peakcoords = np.array([peak.x, peak.y, peak.z]).tolist()
-        labelcoords = np.array([peak.x, peak.y, peak.z]).tolist()
+        peakcoords = [peak.x, peak.y, peak.z]
         builder.primitives(opacity=0.1).sphere(
             center=peakcoords,
             radius=1,
             color="#da21fa",
             tooltip=f"peak {peak_num}",
-        ).label(position=labelcoords, text=f"{peak_num}", label_size=2)
+        ).label(position=peakcoords, text=f"{peak_num}", label_size=2)
 
 
 def generate_isosurfaces_and_focus_on_current(
@@ -227,14 +224,13 @@ def gen_html_metal_id(results_directory, isovalue=5):
     ).color(custom={"molstar_color_theme_name": "element-symbol"})
 
     for peak_num, peak in enumerate(peaks, start=1):
-        peakcoords = np.array([peak.x, peak.y, peak.z]).tolist()
-        labelcoords = np.array([peak.x, peak.y, peak.z]).tolist()
+        peakcoords = [peak.x, peak.y, peak.z]
         builder.primitives(opacity=0.1).sphere(
             center=peakcoords,
             radius=1,
             color="#da21fa",
             tooltip=f"peak {peak_num}",
-        ).label(position=labelcoords, text=f"{peak_num}", label_size=5)
+        ).label(position=peakcoords, text=f"{peak_num}", label_size=5)
 
         ccp4 = builder.download(url=map_files[peak_num]).parse(format="map")
         ccp4.volume().representation(
