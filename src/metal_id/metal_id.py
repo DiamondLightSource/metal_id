@@ -13,6 +13,7 @@ from metal_id_helpers import (
 )
 from scaling import scale_data
 from calc_map import calc_double_diff_maps
+from viewer import gen_html_metal_id
 
 # Command line interface
 parser = argparse.ArgumentParser(
@@ -172,5 +173,18 @@ if files_out:
     logging.info(f"Coot script for viewing results '{coot_viewer_script}' generated\n")
     logging.info("To use run command:\n")
     logging.info(f"coot -s {coot_viewer_script}\n")
+
+    logging.info("\n### Generating viewer file ###\n")
+    gen_html_metal_id(
+        results_directory=output_dir,
+        pdb_file=files_out["pdb"],
+        mtz_file=output_dir / "dimple_below.mtz",
+        diff_map_file=files_out["map"],
+        peak_file=files_out["peaks"],
+        isovalue=peak_threshold,
+    )
+    logging.info(
+        f"Molstar visualization generated to {output_dir / 'metal_id.html'} \n"
+    )
 
 logging.info("\n### End of script ###")

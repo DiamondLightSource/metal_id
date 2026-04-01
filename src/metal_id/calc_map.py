@@ -274,4 +274,4 @@ def calc_double_diff_maps(
         logging.info("\n## Rendering images of peaks ##\n")
         render_diff_map_peaks(output_dir, pdb_file, map_out, peak_threshold, peak_data)
 
-    return {"pdb": output_dir / "final.pdb", "map": map_out}
+    return {"pdb": output_dir / "final.pdb", "map": map_out, "peaks": peak_file}
