@@ -151,12 +151,14 @@ def generate_isosurfaces_and_focus_on_current(
         ).color(color="#2f78d7").opacity(opacity=0.25)
 
 
-def gen_html_metal_id(results_directory, isovalue=5):
-    pdb_file = results_directory / "final.pdb"
-    mtz_file = results_directory / "dimple_below.mtz"
-    diff_map = results_directory / "diff.map"
-    peak_file = results_directory / "found_peaks.dat"
-
+def gen_html_metal_id(
+    results_directory: Path,
+    pdb_file: Path,
+    mtz_file: Path,
+    diff_map_file: Path,
+    peak_file: Path,
+    isovalue: float = 5.0,
+):
     peaks = parse_peaks(peak_file)
 
     # convert dimple mtz to map format
@@ -171,7 +173,7 @@ def gen_html_metal_id(results_directory, isovalue=5):
         # Anomalous double difference map
         map_data = save_cropped_maps(
             pdb_file,
-            diff_map,
+            diff_map_file,
             peak,
             radius=3,
             filename=f"box{peak_num}",
@@ -243,8 +245,8 @@ def gen_html_metal_id(results_directory, isovalue=5):
         linger_duration_ms=5000,
         key="Main",
     )
-
     snapshot_list.append(snapshot_main)
+
     """ Create individual peak pages """
     for peak_num, peak in enumerate(peaks, start=1):
         builder = mvs.create_builder()
@@ -318,5 +320,17 @@ def gen_html_metal_id(results_directory, isovalue=5):
 gen_html_metal_id(
     results_directory=Path(
         "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id"
+    ),
+    pdb_file=Path(
+        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/final.pdb"
+    ),
+    mtz_file=Path(
+        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/dimple_below.mtz"
+    ),
+    diff_map_file=Path(
+        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/diff.map"
+    ),
+    peak_file=Path(
+        "/scratch/dwe15129_scratch_space/metal_ID/2023_test_data/processed/metal_id/found_peaks.dat"
     ),
 )
