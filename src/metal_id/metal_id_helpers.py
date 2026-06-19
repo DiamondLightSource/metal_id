@@ -52,18 +52,27 @@ class PDBFileOrCode:
 def run_dimple(mtz, pdb, dimple_dir):
     if isinstance(pdb, list):
         pdb = " ".join(pdb)
+
     dimple_command = f"dimple {mtz} {pdb} {dimple_dir} --anode -fpng"
 
+    dimple_script = f"""
+    module purge
+    module load ccp4
+    unset PYTHONPATH
+    export PYTHONNOUSERSITE=1
+    {dimple_command}
+    """
+
     logging.info(f"Running dimple with command:\n\n{dimple_command}\n")
-    dimple_output = subprocess.run(
-        dimple_command,
-        shell=True,
+
+    result = subprocess.run(
+        ["bash", "-lc", dimple_script],
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
     )
 
-    return dimple_output
+    return result
 
 
 def generate_coot_viewer_script(
