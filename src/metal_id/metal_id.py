@@ -174,6 +174,7 @@ if files_out:
     logging.info("To use run command:\n")
     logging.info(f"coot -s {coot_viewer_script}\n")
 
+if "peaks" in files_out:
     logging.info("\n### Generating viewer file ###\n")
     gen_html_metal_id(
         results_directory=output_dir,
