@@ -11,7 +11,7 @@ from metal_id_helpers import (
     generate_coot_viewer_script,
     are_pdbs_similar,
 )
-from scaling import scale_data
+from prepare_data import prepare_data
 from calc_map import calc_double_diff_maps
 from viewer import gen_html_metal_id
 
@@ -106,11 +106,11 @@ for arg, arg_name in [
 ]:
     logging.info(f"{arg_name} = {arg}")
 
-# Scale the data
+# Prepare the data
 
-logging.info("\n### Scaling above data relative to the below data ###\n")
-mtz_above, mtz_below = scale_data(mtz_above, mtz_below, output_dir)
-logging.info(f"Scaled above data written to file {mtz_above}")
+logging.info("\n### Preparing above and below data ###\n")
+mtz_above, mtz_below = prepare_data(mtz_above, mtz_below, output_dir)
+logging.info(f"Prepared data: above {mtz_above}, below {mtz_below}")
 
 pdb_files_and_codes = []
 for pdb_file_or_code in pdb:
