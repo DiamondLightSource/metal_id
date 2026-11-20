@@ -145,6 +145,7 @@ def are_pdbs_similar(file_1, file_2):
     # Compare atom type/number
     if atoms_1 != atoms_2:
         logging.error("Different number or type of atoms in pdb files")
+        return False
 
     # Compare atom coordinates
     combined_coords = zip(coords_1, coords_2)

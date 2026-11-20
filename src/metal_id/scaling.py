@@ -66,7 +66,7 @@ def scale_data(mtz_above, mtz_below, output_dir):
         logging.error(
             "ERROR: MTZ files have incompatible symmetry - cannot run metal_id"
         )
-        sys.exit()
+        sys.exit(1)
     # Update mtz_der to the reindexed file path
     mtz_above = hklout
 
@@ -83,7 +83,7 @@ def scale_data(mtz_above, mtz_below, output_dir):
                 logging.error(
                     f"Input MTZ file missing essential column label '{label}' - cannot run metal_id"
                 )
-                sys.exit()
+                sys.exit(1)
 
     # Calculate structure factors if needed using truncate
     obj_below, mtz_below = calc_amplitudes(obj_below, mtz_below, scaling_dir)

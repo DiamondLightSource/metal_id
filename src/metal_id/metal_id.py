@@ -36,7 +36,7 @@ parser.add_argument(
 parser.add_argument(
     "pdb",
     type=PDBFileOrCode,
-    nargs="*",
+    nargs="+",
     help="Path to pdb file(s) and/or 4 character PDB codes",
 )
 parser.add_argument(
@@ -68,15 +68,6 @@ output_dir = args.output.resolve()
 peak_threshold = args.peak_threshold
 max_peaks = args.max_peaks
 
-
-for arg, arg_name in [
-    (mtz_above, "mtz_above"),
-    (mtz_below, "mtz_below"),
-    (pdb, "pdb"),
-    (output_dir, "output_dir"),
-]:
-    logging.info(f"{arg_name} = {arg}")
-
 if output_dir.exists():
     output_dir = ensure_unique_directory(output_dir)
 
@@ -106,6 +97,14 @@ logging.config.dictConfig(METAL_ID_LOGGING)
 logging.info(f"Running command: metal_id {' '.join(sys.argv[1::])}")
 
 logging.info(f"Outputting to: {output_dir}")
+
+for arg, arg_name in [
+    (mtz_above, "mtz_above"),
+    (mtz_below, "mtz_below"),
+    ([str(pdb_file_or_code.value) for pdb_file_or_code in pdb], "pdb"),
+    (output_dir, "output_dir"),
+]:
+    logging.info(f"{arg_name} = {arg}")
 
 # Scale the data
 
