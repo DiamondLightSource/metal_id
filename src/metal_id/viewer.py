@@ -198,7 +198,7 @@ def gen_html_metal_id(
     snapshot_list = []
 
     targetp, camerap = find_camera_pos(st)
-    ns = gemmi.NeighborSearch(st[0], cell, 5).populate(include_h=False).populate()
+    ns = gemmi.NeighborSearch(st[0], cell, 5).populate(include_h=False)
 
     """ Create main page """
     builder = mvs.create_builder()
@@ -269,18 +269,20 @@ def gen_html_metal_id(
 
         generate_spheres(builder, peaks)
         nearest_atom_mark = ns.find_nearest_atom(gemmi.Position(peak.x, peak.y, peak.z))
-        residue = mvs.ComponentExpression(
-            atom_id=st[0][nearest_atom_mark.chain_idx][nearest_atom_mark.residue_idx][
-                nearest_atom_mark.atom_idx
-            ].serial
-        )  # nearest atom id
-        structure.component(
-            selector=residue,
-            custom={
-                "molstar_show_non_covalent_interactions": True,
-                "molstar_non_covalent_interactions_radius_ang": 5.0,
-            },
-        )
+        # No atom may be found if the peak is far from the model
+        if nearest_atom_mark is not None:
+            residue = mvs.ComponentExpression(
+                atom_id=st[0][nearest_atom_mark.chain_idx][
+                    nearest_atom_mark.residue_idx
+                ][nearest_atom_mark.atom_idx].serial
+            )  # nearest atom id
+            structure.component(
+                selector=residue,
+                custom={
+                    "molstar_show_non_covalent_interactions": True,
+                    "molstar_non_covalent_interactions_radius_ang": 5.0,
+                },
+            )
 
         generate_isosurfaces_and_focus_on_current_peak(
             builder, peaks, peak_num, isovalue=isovalue
@@ -291,7 +293,7 @@ def gen_html_metal_id(
             description=f"## Metal_ID Results: \n ### Site {peak_num} \n - Displaying unique site {peak_num}, height {peak.height} σ \n - Anomalous double difference map {isovalue}σ, magenta \n - 2FO-FC at 1.5σ, blue \n \n [Back to Main Summary Page](#Main)",
             transition_duration_ms=700,
             linger_duration_ms=5000,
-            key="site1",
+            key=f"site{peak_num}",
         )
 
         snapshot_list.append(snapshot)
