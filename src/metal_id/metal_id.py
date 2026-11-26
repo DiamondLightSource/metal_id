@@ -24,6 +24,7 @@ from prepare_data import (
 from anomalous import run_anode, run_ctruncate, run_refmac_anomalous
 from calc_map import anode_maps, calc_double_diff_maps, refmac_anomalous_maps
 from viewer import gen_html_metal_id
+from version import get_version
 
 # Command line interface
 parser = argparse.ArgumentParser(
@@ -33,6 +34,11 @@ parser = argparse.ArgumentParser(
     epilog="metal_id is still in development, if you have any issues with it, please contact Phil Blowey at philip.blowey@diamond.ac.uk",
 )
 
+parser.add_argument(
+    "--version",
+    action="version",
+    version=f"%(prog)s {get_version()}",
+)
 parser.add_argument(
     "mtz_above",
     type=mtz_exists,
@@ -125,6 +131,7 @@ METAL_ID_LOGGING = {
 
 logging.config.dictConfig(METAL_ID_LOGGING)
 
+logging.info(f"metal_id version: {get_version()}")
 logging.info(f"Running command: metal_id {' '.join(sys.argv[1::])}")
 
 logging.info(f"Outputting to: {output_dir}")
