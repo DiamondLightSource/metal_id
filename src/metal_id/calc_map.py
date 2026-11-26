@@ -16,7 +16,7 @@ class PeakData:
 
 def read_pha(pha_file: Path) -> np.ndarray:
     """Read an ANODE .pha file (PHS format: h k l F FOM phi sigF) and return an array
-    with columns h, k, l, F*FOM, phi (degrees), as expected by Mtz.set_data.
+    with columns h, k, l, F*FOM, phi (degrees).
 
     The indices are read from fixed width columns (3I4) as large negative indices can
     run into one another, the remaining columns are whitespace separated.
@@ -32,26 +32,102 @@ def read_pha(pha_file: Path) -> np.ndarray:
     return np.array(rows, dtype=np.float32)
 
 
-def pha_to_map(
-    pha_file: Path,
+def coefficients_to_map(
+    coefficients: np.ndarray,
     structure: gemmi.Structure,
     exact_size: list[int] | None = None,
     sample_rate: float = 3.0,
 ) -> gemmi.FloatGrid:
-    """Calculate a map from a .pha file using the unit cell and space group of the
-    structure. If exact_size is given the map is calculated on a grid of that size,
-    otherwise the grid spacing is set from the resolution and sample_rate.
+    """Calculate a map from an array with columns h, k, l, F, phi (degrees) using the
+    unit cell and space group of the structure. If exact_size is given the map is
+    calculated on a grid of that size, otherwise the grid spacing is set from the
+    resolution and sample_rate.
     """
     mtz = gemmi.Mtz(with_base=True)
     mtz.spacegroup = structure.find_spacegroup()
     mtz.set_cell_for_all(structure.cell)
-    mtz.add_dataset("anode")
+    mtz.add_dataset("map")
     mtz.add_column("F", "F")
     mtz.add_column("PHI", "P")
-    mtz.set_data(read_pha(pha_file))
+    mtz.set_data(coefficients.astype(np.float32))
     if exact_size:
         return mtz.transform_f_phi_to_map("F", "PHI", exact_size=exact_size)
     return mtz.transform_f_phi_to_map("F", "PHI", sample_rate=sample_rate)
+
+
+def grid_size(grid: gemmi.FloatGrid) -> list[int]:
+    return [grid.nu, grid.nv, grid.nw]
+
+
+def anode_maps(
+    pha_above: Path, pha_below: Path, structure: gemmi.Structure
+) -> tuple[gemmi.FloatGrid, gemmi.FloatGrid]:
+    """Calculate the above and below anomalous maps, on the same grid, from ANODE .pha
+    files. ANODE normalises the data, so the maps are in units of σ.
+    """
+    map_above = coefficients_to_map(read_pha(pha_above), structure)
+    map_below = coefficients_to_map(
+        read_pha(pha_below), structure, exact_size=grid_size(map_above)
+    )
+    return map_above, map_below
+
+
+def read_map_coefficients(
+    mtz_file: Path, f_label: str = "FAN", phi_label: str = "PHAN"
+) -> tuple[np.ndarray, np.ndarray]:
+    """Read map coefficients from an mtz file, returning an array with columns h, k, l,
+    F, phi and an array of the resolution of each reflection. Reflections without
+    coefficients are left out.
+    """
+    mtz = gemmi.read_mtz_file(str(mtz_file))
+    f = mtz.column_with_label(f_label).array
+    phi = mtz.column_with_label(phi_label).array
+    ok = np.isfinite(f) & np.isfinite(phi)
+    coefficients = np.column_stack([mtz.make_miller_array(), f, phi])[ok]
+    return coefficients, mtz.make_d_array()[ok]
+
+
+def hkl_keys(coefficients: np.ndarray) -> np.ndarray:
+    """A unique integer for each h, k, l (indices must be within ±1000)"""
+    hkl = coefficients[:, :3].astype(np.int64) + 1024
+    return (hkl[:, 0] * 2048 + hkl[:, 1]) * 2048 + hkl[:, 2]
+
+
+def refmac_anomalous_maps(
+    mtz_above: Path, mtz_below: Path, structure: gemmi.Structure
+) -> tuple[gemmi.FloatGrid, gemmi.FloatGrid]:
+    """Calculate the above and below anomalous maps, on the same grid, from the refmac
+    FAN/PHAN coefficients. Only reflections present in both datasets, to the resolution
+    of the lower resolution dataset, are used, so that the maps can be subtracted. The
+    data were scaled against the model by refmac, so the maps are on an approximately
+    absolute scale (e/Å^3).
+    """
+    coeffs_above, d_above = read_map_coefficients(mtz_above)
+    coeffs_below, d_below = read_map_coefficients(mtz_below)
+    d_min = max(d_above.min(), d_below.min())
+    _, in_above, in_below = np.intersect1d(
+        hkl_keys(coeffs_above), hkl_keys(coeffs_below), return_indices=True
+    )
+    keep = d_above[in_above] >= d_min
+    in_above, in_below = in_above[keep], in_below[keep]
+    logging.info(
+        f"Anomalous map coefficients: above {len(coeffs_above)} reflections (to {d_above.min():.2f} Å), "
+        f"below {len(coeffs_below)} (to {d_below.min():.2f} Å). "
+        f"Using the {len(in_above)} reflections common to both, to {d_min:.2f} Å"
+    )
+
+    map_above = coefficients_to_map(coeffs_above[in_above], structure)
+    map_below = coefficients_to_map(
+        coeffs_below[in_below], structure, exact_size=grid_size(map_above)
+    )
+    return map_above, map_below
+
+
+def write_map(grid: gemmi.FloatGrid, map_file: Path):
+    ccp4 = gemmi.Ccp4Map()
+    ccp4.grid = grid
+    ccp4.update_ccp4_header()
+    ccp4.write_ccp4_map(str(map_file))
 
 
 def move_near_model(
@@ -66,38 +142,20 @@ def move_near_model(
     return structure.cell.find_nearest_pbc_position(atom.pos, pos, image.sym_idx)
 
 
-def make_double_diff_map_and_get_peaks(
-    pha_above: Path,
-    pha_below: Path,
-    pdb_file: Path,
-    map_out: Path,
+def find_peaks(
+    grid: gemmi.FloatGrid,
+    structure: gemmi.Structure,
     rmsd_threshold: float,
     max_peaks: int,
 ) -> list[PeakData]:
-    """Generate a double difference map by subtracting the anomalous map below the metal
-    absorption edge from the map above the edge. Any peaks above the rmsd_threshold are
-    then found and the coordinates and peak heights in units of rmsd and map density are
-    returned, largest first, with coordinates moved to the symmetry copy closest to the model.
+    """Find peaks above rmsd_threshold in the map and return their coordinates and peak
+    heights in units of rmsd and map density, largest first, with coordinates moved to
+    the symmetry copy closest to the model.
     """
-    structure = gemmi.read_structure(str(pdb_file))
-
-    map_diff = pha_to_map(pha_above, structure)
-    map_below = pha_to_map(
-        pha_below, structure, exact_size=[map_diff.nu, map_diff.nv, map_diff.nw]
-    )
-    map_diff.array[:] -= map_below.array
-
-    ccp4 = gemmi.Ccp4Map()
-    ccp4.grid = map_diff
-    ccp4.update_ccp4_header()
-    ccp4.write_ccp4_map(str(map_out))
-    logging.info(f"Double difference map written to {map_out}")
-
-    logging.info("\n## Finding peaks in double difference map ##")
-    rms = float(np.std(map_diff.array))
+    rms = float(np.std(grid.array))
     logging.info(f"Map rmsd: {rms:.4f}")
     blobs = gemmi.find_blobs_by_flood_fill(
-        map_diff,
+        grid,
         cutoff=rmsd_threshold * rms,
         min_volume=0.0,
         min_score=0.0,
@@ -136,41 +194,32 @@ def make_double_diff_map_and_get_peaks(
 
 def calc_double_diff_maps(
     pdb_file: Path,
-    pha_above: Path,
-    pha_below: Path,
+    map_above: gemmi.FloatGrid,
+    map_below: gemmi.FloatGrid,
     output_dir: Path,
     peak_threshold: float,
     max_peaks: int,
 ) -> dict[str, Path]:
-    # Check file inputs
-    for file_type, file_path in [
-        ("AnoDe map above", pha_above),
-        ("AnoDe map below", pha_below),
-    ]:
-        if not file_path.is_file():
-            logging.error(f"Could not find {file_type}, expected at: {file_path}")
-            return {}
+    """Subtract the anomalous map below the absorption edge from the map above it, write
+    out the maps and find the peaks in the double difference map.
+    """
+    structure = gemmi.read_structure(str(pdb_file))
+    if pdb_file != output_dir / "final.pdb":
+        shutil.copyfile(pdb_file, output_dir / "final.pdb")
 
-    logging.info("Copying input files to working directory")
-    for file, filename in [
-        (pdb_file, "final.pdb"),
-        (pha_above, "above.pha"),
-        (pha_below, "below.pha"),
-    ]:
-        shutil.copyfile(file, output_dir / filename)
+    write_map(map_above, output_dir / "anom_above.map")
+    write_map(map_below, output_dir / "anom_below.map")
 
     logging.info("Making double difference map")
     logging.info(f"Using {pdb_file} as reference coordinates for map")
+    map_diff = map_above.clone()
+    map_diff.array[:] -= map_below.array
     map_out = output_dir / "diff.map"
+    write_map(map_diff, map_out)
+    logging.info(f"Double difference map written to {map_out}")
 
-    peak_data = make_double_diff_map_and_get_peaks(
-        pha_above,
-        pha_below,
-        pdb_file,
-        map_out,
-        peak_threshold,
-        max_peaks,
-    )
+    logging.info("\n## Finding peaks in double difference map ##")
+    peak_data = find_peaks(map_diff, structure, peak_threshold, max_peaks)
 
     files_out = {"pdb": output_dir / "final.pdb", "map": map_out}
 

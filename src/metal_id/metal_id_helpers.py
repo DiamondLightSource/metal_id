@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 import subprocess
 import logging
-from iotbx import pdb
+import sys
 
 
 def ensure_unique_directory(path):
@@ -49,11 +49,47 @@ class PDBFileOrCode:
             )
 
 
+def run_ccp4(
+    program: str,
+    args: list,
+    log_file: Path,
+    keywords: list[str] | None = None,
+    cwd: Path | None = None,
+) -> str:
+    """
+    Run a CCP4 program with the given arguments and keyword input, write its output to
+    log_file and return the output. Exits if the program can't be run or fails.
+    """
+    command = [program, *(str(arg) for arg in args)]
+    logging.info(f"Running command: {' '.join(command)}")
+    if keywords:
+        logging.info("With keywords:\n" + "\n".join(keywords))
+    try:
+        result = subprocess.run(
+            command,
+            input="\n".join(keywords or []) + "\n",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            cwd=cwd,
+        )
+    except FileNotFoundError:
+        logging.error(f"{program} not found - is CCP4 loaded?")
+        sys.exit(1)
+    log_file.write_text(result.stdout)
+    if result.returncode != 0:
+        logging.error(
+            f"{program} failed with exit code {result.returncode}, see {log_file}"
+        )
+        sys.exit(1)
+    return result.stdout
+
+
 def run_dimple(mtz, pdb, dimple_dir):
     if isinstance(pdb, list):
         pdb = " ".join(pdb)
 
-    dimple_command = f"dimple {mtz} {pdb} {dimple_dir} --anode -fpng"
+    dimple_command = f"dimple {mtz} {pdb} {dimple_dir} -f none"
 
     dimple_script = f"""
     module purge
@@ -99,69 +135,3 @@ def generate_coot_viewer_script(
             script_file.write(line + "\n")
 
     return viewer_script_path
-
-
-def are_pdbs_similar(file_1, file_2):
-    """
-    Determine if two pdb files have the same crystal symmetry, the same number
-    and type of atoms and sufficiently similar unit cell and atomic coordinates
-    within the defined tolerances
-    """
-
-    def read_pdb(file):
-        """
-        Read a pdb file to get crystal symmetry, atom names and atom coordinates
-        """
-        pdb_obj = pdb.input(file)
-        sym = pdb_obj.crystal_symmetry()
-        atoms = pdb_obj.atoms()
-        atom_names = atoms.extract_name()
-        list_atoms = list(atom_names)
-        atom_coords = atoms.extract_xyz()
-        list_coords = list(atom_coords)
-        return sym, list_atoms, list_coords
-
-    # Read pdb files
-    sym_1, atoms_1, coords_1 = read_pdb(str(file_1))
-    sym_2, atoms_2, coords_2 = read_pdb(str(file_2))
-
-    # Use default if none set tolerances
-    tolerances = {
-        "rel_cell_length": 0.01,
-        "abs_cell_angle": 1.0,
-        "abs_coord_diff": 5.0,  # Units Å
-    }
-
-    # Compare symmetry
-    is_similar_sym = sym_1.is_similar_symmetry(
-        sym_2,
-        relative_length_tolerance=tolerances["rel_cell_length"],
-        absolute_angle_tolerance=tolerances["abs_cell_angle"],
-    )
-    if not is_similar_sym:
-        logging.error("PDB file symmetries are too different")
-        return False
-
-    # Compare atom type/number
-    if atoms_1 != atoms_2:
-        logging.error("Different number or type of atoms in pdb files")
-        return False
-
-    # Compare atom coordinates
-    combined_coords = zip(coords_1, coords_2)
-    for xyz_1, xyz_2 in combined_coords:
-        # Calculate the distance between xyz_1 and xyz_2
-        diff = abs(
-            (
-                (xyz_1[0] - xyz_2[0]) ** 2
-                + (xyz_1[1] - xyz_2[1]) ** 2
-                + (xyz_1[2] - xyz_2[2]) ** 2
-            )
-            ** 0.5
-        )
-        if diff > tolerances["abs_coord_diff"]:
-            logging.error(
-                f"PDB atom coordinates have difference > tolerance ({tolerances['abs_coord_diff']} Å"
-            )
-            return False
-    return True
