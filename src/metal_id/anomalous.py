@@ -6,7 +6,7 @@ from pathlib import Path
 
 import gemmi
 
-from metal_id_helpers import run_ccp4
+from metal_id.metal_id_helpers import run_ccp4
 
 
 def run_ctruncate(mtz_file: Path, work_dir: Path) -> Path:

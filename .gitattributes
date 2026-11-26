@@ -1,0 +1,8 @@
+# Fill in the version when a release is made with git archive
+.git_archival.txt export-subst
+
+# Leave development files out of releases
+.gitattributes export-ignore
+.gitignore export-ignore
+.pre-commit-config.yaml export-ignore
+RELEASING.md export-ignore
