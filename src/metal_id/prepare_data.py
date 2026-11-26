@@ -6,7 +6,7 @@ from pathlib import Path
 
 import gemmi
 
-from metal_id_helpers import run_ccp4
+from metal_id.metal_id_helpers import run_ccp4
 
 ESSENTIAL_LABELS = ["IMEAN", "SIGIMEAN", "I(+)", "SIGI(+)", "I(-)", "SIGI(-)"]
 
