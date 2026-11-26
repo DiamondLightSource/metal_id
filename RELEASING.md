@@ -40,9 +40,6 @@ Versions are `MAJOR.MINOR.PATCH`, tagged as `vMAJOR.MINOR.PATCH` (e.g. `v0.2.0`)
    git archive v0.2.0 | tar -x -C /dls_sw/apps/metal_id/0.2.0
    ```
 
-   Don't install by cloning and deleting `.git`: the version would then be reported
-   as `unknown`.
-
 4. Add a module file for the new version, by copying the previous version's module
    file and changing the version and path to the new directory. Test it:
 
@@ -63,7 +60,27 @@ To roll back, set the default module version back to the previous release.
 reports the output of `git describe` (e.g. `v0.2.0-3-gabc1234-dirty`: 3 commits after
 v0.2.0, with uncommitted changes).
 
-The version in a release comes from `src/metal_id/version.py`, which `git archive` fills
-in with the tag (see `.gitattributes`). This uses annotated tags (`git tag -a`) only.
-A lightweight tag is ignored, so the version is described relative to the last
-annotated tag (e.g. `v0.2.0-1-gabc1234`), or reported as `unknown` if there isn't one.
+The version comes from the git tag, in one of three ways:
+
+- In a git checkout, from `git describe`.
+- In a release made with `git archive`, from `.git_archival.txt`, which `git archive`
+  fills in with the tag (see `.gitattributes`).
+- When installed with pip, from the package version, which `setuptools-scm` takes from
+  the tag when the package is built (e.g. `0.2.0`, without the `v`).
+
+So don't install by copying a clone with `.git` deleted: the version would then be
+reported as `unknown`.
+
+## Installing with pip instead
+
+metal_id can also be installed with pip into its own environment for each release,
+e.g.:
+
+```
+python -m venv /dls_sw/apps/metal_id/0.2.0
+/dls_sw/apps/metal_id/0.2.0/bin/pip install git+https://github.com/DiamondLightSource/metal_id@v0.2.0
+```
+
+The module file then puts that environment's `bin` directory on `PATH` (and loads
+CCP4). This doesn't need `dlstbx.python`, but installs its own copies of gemmi, numpy
+and molviewspec.

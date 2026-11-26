@@ -1,6 +1,9 @@
 #!/bin/bash
+# Run metal_id from a copy of the repository (e.g. a release made with git archive)
+# without installing it. metal_id can also be installed with pip, which provides a
+# metal_id command directly.
 
 full_path="$(cd "${0%/*}" 2>/dev/null; echo "$PWD"/"${0##*/}")"
 export METAL_ID_ROOT=`dirname "$full_path" | sed 's/\/bin$//'`
 
-dlstbx.python ${METAL_ID_ROOT}/src/metal_id/metal_id.py $@
+PYTHONPATH="${METAL_ID_ROOT}/src${PYTHONPATH:+:$PYTHONPATH}" dlstbx.python -m metal_id "$@"

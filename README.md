@@ -2,20 +2,31 @@
 Pipeline for analysing metal (or heavy element) identification experiments in macromolecular crystallography experiments.
 
 ## Usage
-This pipeline is dependent on the dials python environment (`cctbx.python`) and ccp4 packages. In the dls_sw installation, these are loaded in as a dependenc and thus the pipeline can be used as follows:
+metal_id needs Python 3.10 or later with `gemmi`, `numpy` and `molviewspec`, and the CCP4 programs (`pointless`, `ctruncate`, `refmac5`, `dimple`, and for `--method anode` also `mtz2sca`, `shelxc` and `anode`). At Diamond, these are loaded with the module:
 ```
 module load metal_id
 
-metal_id mtz_above mtz_below pdb output_dir
+metal_id mtz_above mtz_below pdb [additional pdbs] [-o output_dir] [options]
 ```
 
-Otherwise, load dials and ccp4, then from this repository call: 
+Run `metal_id --help` for the options and `metal_id --version` for the version. If no output directory is given, the pipeline outputs to a directory named `metal_id`.
 
+### Installing
+metal_id is a Python package and can be installed with pip, which provides the `metal_id` command (CCP4 still needs to be loaded separately):
 ```
-bin/metal_id mtz_above mtz_below pdb output_dir
+pip install git+https://github.com/DiamondLightSource/metal_id@v0.2.0
 ```
 
-If no output directory name is specified, the pipeline will output to a directory named `metal_id`
+Or, from a copy of this repository, it can be run without installing, using the dials/dlstbx Python environment:
+```
+bin/metal_id mtz_above mtz_below pdb
+```
+or with any Python environment that has the dependencies:
+```
+PYTHONPATH=src python -m metal_id mtz_above mtz_below pdb
+```
+
+For development, install it in editable mode with `pip install -e .`.
 
 ## Pipeline overview
 Takes two mtz files and one or more models (pdb files and/or 4 character PDB codes) as input. The mtz files should correspond to data collected above and below an element's absorption edge and must contain `IMEAN`, `I(+)` and `I(-)` columns and the wavelength. The pipeline calculates an anomalous map for each dataset and subtracts the 'below' map from the 'above' map to give an anomalous 'double' difference map, `diff.map`, whose peaks give the location(s) of the element in question.

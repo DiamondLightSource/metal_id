@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "metal_id"
+dynamic = ["version"]
+description = "Locate metal (or other heavy element) sites from anomalous data collected above and below an absorption edge"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Phil Blowey", email = "philip.blowey@diamond.ac.uk" }]
+# Minimum versions are the versions metal_id has been tested with
+dependencies = [
+    "gemmi>=0.7.5",
+    "molviewspec>=1.8.1",
+    "numpy>=2.4.6",
+]
+
+[project.scripts]
+metal_id = "metal_id.metal_id:main"
+
+[project.urls]
+Repository = "https://github.com/DiamondLightSource/metal_id"
+
+# The version is taken from the git tag (or from .git_archival.txt in a git archive)
+[tool.setuptools_scm]

@@ -1,5 +1,5 @@
 # Fill in the version when a release is made with git archive
-src/metal_id/version.py export-subst
+.git_archival.txt export-subst
 
 # Leave development files out of releases
 .gitattributes export-ignore
