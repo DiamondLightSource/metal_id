@@ -6,4 +6,9 @@
 full_path="$(cd "${0%/*}" 2>/dev/null; echo "$PWD"/"${0##*/}")"
 export METAL_ID_ROOT=`dirname "$full_path" | sed 's/\/bin$//'`
 
-PYTHONPATH="${METAL_ID_ROOT}/src${PYTHONPATH:+:$PYTHONPATH}" dlstbx.python -m metal_id "$@"
+# Put src first on the import path from within Python, rather than with PYTHONPATH,
+# which dlstbx.python may reset (and so that a "metal_id" output directory in the
+# current directory can't be imported instead). The src path is passed as the first
+# argument and removed before metal_id reads its arguments.
+dlstbx.python -c 'import sys; sys.path.insert(0, sys.argv.pop(1)); from metal_id.metal_id import main; main()' \
+    "${METAL_ID_ROOT}/src" "$@"
