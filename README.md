@@ -31,11 +31,16 @@ For development, install it in editable mode with the test dependencies, and run
 pip install -e ".[test]"
 pytest
 ```
-Most of the tests don't need CCP4: the CCP4 programs are replaced by stand-ins that calculate their outputs from a small synthetic structure (see `tests/synthetic.py`). The tests marked `ccp4` (in `tests/test_ccp4.py`) run the whole workflow with the real CCP4 programs, on synthetic anomalous data with a Ca site. They are skipped unless CCP4 is loaded:
+Most of the tests don't need CCP4: the CCP4 programs are replaced by stand-ins that calculate their outputs from a small synthetic structure (see `tests/synthetic.py`). The tests marked `ccp4` run the whole workflow with the real CCP4 programs:
+- `tests/test_ccp4.py`: on synthetic anomalous data with a Ca site.
+- `tests/test_real_data.py`: on thermolysin data above and below the Ca K edge, in `tests/data` (or the directory in `METAL_ID_TEST_DATA`). `model.pdb` there is dimple's `final.pdb` from `above.mtz` and `2TLX.pdb`.
+
+They are skipped unless CCP4 is loaded (set `METAL_ID_REQUIRE_CCP4=1` to make that an error instead):
 ```
 module load ccp4
-pytest              # all tests
-pytest -m ccp4      # only the tests with the real CCP4 programs
+pytest                # all tests
+pytest -m ccp4        # only the tests with the real CCP4 programs
+pytest -m "not ccp4"  # only the quick tests
 ```
 
 ## Pipeline overview
