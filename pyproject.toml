@@ -7,7 +7,7 @@ name = "metal_id"
 dynamic = ["version"]
 description = "Locate metal (or other heavy element) sites from anomalous data collected above and below an absorption edge"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 authors = [{ name = "Phil Blowey", email = "philip.blowey@diamond.ac.uk" }]
 # Minimum versions are the versions metal_id has been tested with
 dependencies = [
@@ -15,6 +15,9 @@ dependencies = [
     "molviewspec>=1.8.1",
     "numpy>=2.4.6",
 ]
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [project.scripts]
 metal_id = "metal_id.metal_id:main"
@@ -24,3 +27,15 @@ Repository = "https://github.com/DiamondLightSource/metal_id"
 
 # The version is taken from the git tag (or from .git_archival.txt in a git archive)
 [tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Test the code in src without needing to install it
+pythonpath = ["src"]
+markers = [
+    "ccp4: needs the CCP4 programs (skipped unless CCP4 is loaded)",
+]
+filterwarnings = [
+    # From molviewspec's use of pydantic, not metal_id
+    "ignore::DeprecationWarning:molviewspec",
+]
