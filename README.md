@@ -2,7 +2,7 @@
 Pipeline for analysing metal (or heavy element) identification experiments in macromolecular crystallography experiments.
 
 ## Usage
-metal_id needs Python 3.10 or later with `gemmi`, `numpy` and `molviewspec`, and the CCP4 programs (`pointless`, `ctruncate`, `refmac5`, `dimple`, and for `--method anode` also `mtz2sca`, `shelxc` and `anode`). At Diamond, these are loaded with the module:
+metal_id needs Python 3.11 or later with `gemmi`, `numpy` and `molviewspec`, and the CCP4 programs (`pointless`, `ctruncate`, `refmac5`, `dimple`, and for `--method anode` also `mtz2sca`, `shelxc` and `anode`). At Diamond, these are loaded with the module:
 ```
 module load metal_id
 
@@ -26,7 +26,22 @@ or with any Python environment that has the dependencies:
 PYTHONPATH=src python -m metal_id mtz_above mtz_below pdb
 ```
 
-For development, install it in editable mode with `pip install -e .`.
+For development, install it in editable mode with the test dependencies, and run the tests with pytest:
+```
+pip install -e ".[test]"
+pytest
+```
+Most of the tests don't need CCP4: the CCP4 programs are replaced by stand-ins that calculate their outputs from a small synthetic structure (see `tests/synthetic.py`). The tests marked `ccp4` run the whole workflow with the real CCP4 programs:
+- `tests/test_ccp4.py`: on synthetic anomalous data with a Ca site.
+- `tests/test_real_data.py`: on thermolysin data above and below the Ca K edge, in `tests/data` (or the directory in `METAL_ID_TEST_DATA`). `model.pdb` there is dimple's `final.pdb` from `above.mtz` and `2TLX.pdb`.
+
+They are skipped unless CCP4 is loaded (set `METAL_ID_REQUIRE_CCP4=1` to make that an error instead):
+```
+module load ccp4
+pytest                # all tests
+pytest -m ccp4        # only the tests with the real CCP4 programs
+pytest -m "not ccp4"  # only the quick tests
+```
 
 ## Pipeline overview
 Takes two mtz files and one or more models (pdb files and/or 4 character PDB codes) as input. The mtz files should correspond to data collected above and below an element's absorption edge and must contain `IMEAN`, `I(+)` and `I(-)` columns and the wavelength. The pipeline calculates an anomalous map for each dataset and subtracts the 'below' map from the 'above' map to give an anomalous 'double' difference map, `diff.map`, whose peaks give the location(s) of the element in question.

@@ -6,3 +6,4 @@
 .gitignore export-ignore
 .pre-commit-config.yaml export-ignore
 RELEASING.md export-ignore
+tests/data export-ignore
