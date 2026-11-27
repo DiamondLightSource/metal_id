@@ -137,8 +137,8 @@ def test_deposited_model_runs_dimple(tmp_path, data):
 def test_other_crystal_form_runs_molecular_replacement(tmp_path, data):
     # A model from another crystal form doesn't match the data, and dimple goes
     # straight to MR. The results may be in a different frame from the input model.
-    # (A model without CRYST1 would be the same test, but dimple in CCP4 9.0 fails on
-    # one at its rwcontents step - a bug fixed in the next CCP4 release.)
+    # (A model without CRYST1 would be the same test, but dimple in CCP4 9.0.017 fails
+    # on one at its rwcontents step - a bug fixed in the next CCP4 release.)
     out = tmp_path / "out"
     model = set_model_cell(
         data["model"], tmp_path / "other_form.pdb", (60, 70, 120, 90, 90, 90), "P 1"
